@@ -1,13 +1,75 @@
 # lastlight-evals — agent orientation
 
-Human-facing usage (how to run, how to add a case) lives in `README.md`. This
-file is the *why* — the seams and invariants to preserve when changing the
-harness.
+This file orients an agent working in this repo: how to use it (commands +
+common tasks below) and the *why* — the seams and invariants to preserve when
+changing the harness. The full human-facing reference lives in `README.md`.
 
 This is a **standalone package** that depends on `lastlight` (npm). It used to
 live inside the core repo at `lastlight/evals`; it now consumes core through the
 public `lastlight/evals` barrel. Source is under `src/`; the shipped sample
 `datasets/` and `models.json` sit at the package root.
+
+## What this is, in one line
+
+A CLI that runs Last Light's real workflows against a mocked GitHub for a set of
+models and prints a deterministic, model-comparison scorecard. `run.ts` is the
+entry; `lastlight-evals run` / `lastlight-evals init` are the two subcommands.
+
+## Commands
+
+```bash
+npm install            # installs lastlight (core) + agentic-pi
+npm run build          # tsc → dist/ (bin: dist/run.js)
+npm test               # vitest — the AI-free mechanism.test.ts only
+npx tsc --noEmit       # typecheck
+
+# Dev (tsx, no build):
+npx tsx src/run.ts run triage          # one tier
+npx tsx src/run.ts run --compare       # cross-vendor (key-gated, see models.json)
+npx tsx src/run.ts init /tmp/my-evals  # scaffold an overlay+evals repo
+
+# Installed:
+lastlight-evals run [tier...] [--model X] [--runs N] [--overlay DIR] [--datasets DIR]
+```
+
+Needs a provider key (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `FIREWORKS_API_KEY`
+/ `OPENROUTER_API_KEY`) in env or a cwd `.env`. Output → `./eval-results/<tiers>/`
+(`index.html` + `scorecard.json` + `predictions.jsonl`). The runner exits
+non-zero ONLY on harness error — a weak model scoring badly is the measurement.
+
+## Where things live
+
+| File | Role |
+|---|---|
+| `src/run.ts` | CLI entry + subcommand dispatch (`run` / `init`); work-list, parallelism, live HTML. |
+| `src/run-instance.ts` | Runs ONE instance through the real workflow (the only file importing `lastlight/evals`). |
+| `src/bootstrap.ts` | `bootstrapAssets()` — wires core's asset roots. MUST run before any workflow access. |
+| `src/discovery.ts` | Multi-root tier discovery (`tier.json` → `defaultWorkflow`). |
+| `src/init.ts` | `init` — scaffold + `gh repo create` an overlay+evals repo. |
+| `src/fake-github.ts` | In-process fake GitHub REST API (seeds fixtures, records mutations). |
+| `src/seed.ts` / `src/grade.ts` / `src/metrics.ts` | Workspace seeding / deterministic grading / token-cost roll-up. |
+| `src/report.ts` / `src/html-report.ts` | Scorecard + JSON/JSONL artifacts / self-contained HTML. |
+| `datasets/<tier>/` | Shipped sample tiers (`instances.json` + `tier.json` [+ `repos/` `tests/`]). |
+| `models.json` | Default + compare model registry. |
+
+## Common tasks
+
+- **Run a subset:** `EVAL_INSTANCE=<substr> lastlight-evals run <tier>` filters by
+  instance id; `--model haiku` (fuzzy) picks one model; `--runs 3` repeats
+  (worst-case verdict, mean metrics).
+- **Add a triage case:** append a `SweBenchInstance` to
+  `datasets/triage/instances.json` (`instance_id`, `issue`, `triage_gold`,
+  `expect_github`). See README "Add a case".
+- **Add a code-fix case:** `datasets/code-fix/instances.json` +
+  `repos/<id>/` (fixture @ base) + `tests/<id>/` (held-out tests).
+- **Add a tier:** drop a dir with `instances.json` + `tier.json`
+  (`{ name, defaultWorkflow, description }`). No code change — `discovery.ts`
+  finds it. The workflow must be resolvable by core's `getWorkflow`.
+- **Add a model:** add an entry to `models.json` `compare` (`id`, `label`,
+  `envKey`); it runs only when its `envKey` is set.
+- **Eval an overlay's own workflows + datasets:**
+  `lastlight-evals run --overlay <repo>` (workflows shadow built-ins; datasets
+  read from `<repo>/evals/datasets/`).
 
 ## Package architecture (the extraction seams)
 
