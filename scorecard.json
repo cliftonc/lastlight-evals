@@ -1,0 +1,2114 @@
+{
+  "models": [
+    {
+      "model": "anthropic/claude-opus-4-8",
+      "total": 5,
+      "codeFixResolved": 1,
+      "codeFixTotal": 1,
+      "behavioralOk": 5,
+      "behavioralTotal": 5,
+      "avgInputTokens": 24.2,
+      "avgCachedTokens": 215823.6,
+      "avgOutputTokens": 3908.4,
+      "totalCostUsd": 1.67165025,
+      "p50DurationMs": 43397,
+      "errors": 0
+    },
+    {
+      "model": "fireworks/accounts/fireworks/models/glm-5p2",
+      "total": 5,
+      "codeFixResolved": 1,
+      "codeFixTotal": 1,
+      "behavioralOk": 5,
+      "behavioralTotal": 5,
+      "avgInputTokens": 44708,
+      "avgCachedTokens": 149672.2,
+      "avgOutputTokens": 3065.2,
+      "totalCostUsd": 0.57496426,
+      "p50DurationMs": 43083,
+      "errors": 0
+    },
+    {
+      "model": "openai/gpt-5.5",
+      "total": 5,
+      "codeFixResolved": 1,
+      "codeFixTotal": 1,
+      "behavioralOk": 5,
+      "behavioralTotal": 5,
+      "avgInputTokens": 35503.8,
+      "avgCachedTokens": 212172.8,
+      "avgOutputTokens": 4081.6,
+      "totalCostUsd": 2.030267,
+      "p50DurationMs": 28600,
+      "errors": 0
+    },
+    {
+      "model": "fireworks/accounts/fireworks/models/deepseek-v4-pro",
+      "total": 5,
+      "codeFixResolved": 0,
+      "codeFixTotal": 1,
+      "behavioralOk": 4,
+      "behavioralTotal": 4,
+      "avgInputTokens": 19163.4,
+      "avgCachedTokens": 109024.4,
+      "avgOutputTokens": 3774,
+      "totalCostUsd": 0.31143187,
+      "p50DurationMs": 64428,
+      "errors": 1
+    },
+    {
+      "model": "fireworks/accounts/fireworks/models/gpt-oss-120b",
+      "total": 5,
+      "codeFixResolved": 0,
+      "codeFixTotal": 1,
+      "behavioralOk": 4,
+      "behavioralTotal": 4,
+      "avgInputTokens": 25978.4,
+      "avgCachedTokens": 62668.2,
+      "avgOutputTokens": 1065.8,
+      "totalCostUsd": 0.027381315,
+      "p50DurationMs": 10953,
+      "errors": 1
+    },
+    {
+      "model": "anthropic/claude-sonnet-4-6",
+      "total": 5,
+      "codeFixResolved": 1,
+      "codeFixTotal": 1,
+      "behavioralOk": 5,
+      "behavioralTotal": 5,
+      "avgInputTokens": 16.6,
+      "avgCachedTokens": 194883.8,
+      "avgOutputTokens": 3482.8,
+      "totalCostUsd": 0.8752764000000001,
+      "p50DurationMs": 43987,
+      "errors": 0
+    },
+    {
+      "model": "anthropic/claude-haiku-4-5",
+      "total": 5,
+      "codeFixResolved": 1,
+      "codeFixTotal": 1,
+      "behavioralOk": 5,
+      "behavioralTotal": 5,
+      "avgInputTokens": 217,
+      "avgCachedTokens": 316180.8,
+      "avgOutputTokens": 6311.8,
+      "totalCostUsd": 0.45244385000000004,
+      "p50DurationMs": 22718,
+      "errors": 0
+    },
+    {
+      "model": "openai/gpt-5.4-mini",
+      "total": 5,
+      "codeFixResolved": 1,
+      "codeFixTotal": 1,
+      "behavioralOk": 5,
+      "behavioralTotal": 5,
+      "avgInputTokens": 24593.6,
+      "avgCachedTokens": 236953.6,
+      "avgOutputTokens": 5465,
+      "totalCostUsd": 0.30404610000000004,
+      "p50DurationMs": 31053,
+      "errors": 0
+    },
+    {
+      "model": "openai/gpt-5.3-codex",
+      "total": 5,
+      "codeFixResolved": 1,
+      "codeFixTotal": 1,
+      "behavioralOk": 5,
+      "behavioralTotal": 5,
+      "avgInputTokens": 20908.2,
+      "avgCachedTokens": 242560,
+      "avgOutputTokens": 4025.8,
+      "totalCostUsd": 0.67699275,
+      "p50DurationMs": 28248,
+      "errors": 0
+    }
+  ],
+  "results": [
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "anthropic/claude-opus-4-8",
+      "workflowSucceeded": true,
+      "inputTokens": 73,
+      "cachedTokens": 691120,
+      "outputTokens": 10274,
+      "costUsd": 0.9186742499999999,
+      "durationMs": 189310,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": true
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": true,
+            "detail": "head=lastlight/codefix__date-range-off-by-one base=main title=\"Fix off-by-one in inclusiveDayCount (#201)\""
+          }
+        ]
+      },
+      "resolved": true,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": true
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": true
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "fireworks/accounts/fireworks/models/glm-5p2",
+      "workflowSucceeded": true,
+      "inputTokens": 131273,
+      "cachedTokens": 467900,
+      "outputTokens": 8751,
+      "costUsd": 0.3439406,
+      "durationMs": 195238,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": true
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": true,
+            "detail": "head=lastlight/codefix__date-range-off-by-one base=main title=\"Fix off-by-one in inclusiveDayCount (#201)\""
+          }
+        ]
+      },
+      "resolved": true,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": true
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": true
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "openai/gpt-5.5",
+      "workflowSucceeded": true,
+      "inputTokens": 128234,
+      "cachedTokens": 825856,
+      "outputTokens": 14450,
+      "costUsd": 1.487598,
+      "durationMs": 319593,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": true
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": true,
+            "detail": "head=lastlight/codefix__date-range-off-by-one base=main title=\"Fix inclusive date range off-by-one (#201)\""
+          }
+        ]
+      },
+      "resolved": true,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": true
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": true
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "fireworks/accounts/fireworks/models/deepseek-v4-pro",
+      "workflowSucceeded": false,
+      "inputTokens": 40449,
+      "cachedTokens": 300435,
+      "outputTokens": 7701,
+      "costUsd": 0.140743815,
+      "durationMs": 147375,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": false
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "error": "guardrails: BLOCKED",
+      "behavioral": {
+        "ok": false,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": false,
+            "detail": "0 PR(s)"
+          }
+        ]
+      },
+      "resolved": false,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": false
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": false
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "fireworks/accounts/fireworks/models/gpt-oss-120b",
+      "workflowSucceeded": false,
+      "inputTokens": 29878,
+      "cachedTokens": 158055,
+      "outputTokens": 1846,
+      "costUsd": 0.007960125,
+      "durationMs": 29814,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": false
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "error": "guardrails: BLOCKED",
+      "behavioral": {
+        "ok": false,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": false,
+            "detail": "0 PR(s)"
+          }
+        ]
+      },
+      "resolved": false,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": false
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": false
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 2,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "anthropic/claude-sonnet-4-6",
+      "workflowSucceeded": true,
+      "inputTokens": 49,
+      "cachedTokens": 647687,
+      "outputTokens": 9670,
+      "costUsd": 0.5093466,
+      "durationMs": 190448,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": true
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": true,
+            "detail": "head=lastlight/codefix__date-range-off-by-one base=main title=\"Fix off-by-one in inclusiveDayCount (#201)\""
+          }
+        ]
+      },
+      "resolved": true,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": true
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": true
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "fireworks/accounts/fireworks/models/glm-5p2",
+      "workflowSucceeded": true,
+      "inputTokens": 20010,
+      "cachedTokens": 33783,
+      "outputTokens": 1585,
+      "costUsd": 0.043771580000000004,
+      "durationMs": 27576,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "fireworks/accounts/fireworks/models/glm-5p2",
+      "workflowSucceeded": true,
+      "inputTokens": 21396,
+      "cachedTokens": 17801,
+      "outputTokens": 606,
+      "costUsd": 0.03724906,
+      "durationMs": 19538,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "fireworks/accounts/fireworks/models/glm-5p2",
+      "workflowSucceeded": true,
+      "inputTokens": 31655,
+      "cachedTokens": 142490,
+      "outputTokens": 2453,
+      "costUsd": 0.09215759999999999,
+      "durationMs": 54468,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "fireworks/accounts/fireworks/models/glm-5p2",
+      "workflowSucceeded": true,
+      "inputTokens": 19206,
+      "cachedTokens": 86387,
+      "outputTokens": 1931,
+      "costUsd": 0.05784542,
+      "durationMs": 43083,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 3,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "fireworks/accounts/fireworks/models/deepseek-v4-pro",
+      "workflowSucceeded": true,
+      "inputTokens": 14353,
+      "cachedTokens": 43507,
+      "outputTokens": 3039,
+      "costUsd": 0.041858455,
+      "durationMs": 66436,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "anthropic/claude-haiku-4-5",
+      "workflowSucceeded": true,
+      "inputTokens": 857,
+      "cachedTokens": 1353462,
+      "outputTokens": 22432,
+      "costUsd": 0.33339650000000004,
+      "durationMs": 248114,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": true
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": true,
+            "detail": "head=lastlight/codefix__date-range-off-by-one base=main title=\"Fix off-by-one error in inclusiveDayCount (#201)\""
+          }
+        ]
+      },
+      "resolved": true,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": true
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": true
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "fireworks/accounts/fireworks/models/deepseek-v4-pro",
+      "workflowSucceeded": true,
+      "inputTokens": 13034,
+      "cachedTokens": 42872,
+      "outputTokens": 2418,
+      "costUsd": 0.03731024,
+      "durationMs": 45798,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "openai/gpt-5.4-mini",
+      "workflowSucceeded": true,
+      "inputTokens": 76704,
+      "cachedTokens": 957440,
+      "outputTokens": 20052,
+      "costUsd": 0.21957000000000004,
+      "durationMs": 334093,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": true
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": true,
+            "detail": "head=lastlight/codefix__date-range-off-by-one base=main title=\"Fix inclusive date-range counting off by one (#201)\""
+          }
+        ]
+      },
+      "resolved": true,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": true
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": true
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "anthropic/claude-opus-4-8",
+      "workflowSucceeded": true,
+      "inputTokens": 10,
+      "cachedTokens": 84230,
+      "outputTokens": 3116,
+      "costUsd": 0.238147,
+      "durationMs": 43397,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "fireworks/accounts/fireworks/models/deepseek-v4-pro",
+      "workflowSucceeded": true,
+      "inputTokens": 14552,
+      "cachedTokens": 69284,
+      "outputTokens": 3030,
+      "costUsd": 0.04591105999999999,
+      "durationMs": 52718,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "anthropic/claude-opus-4-8",
+      "workflowSucceeded": true,
+      "inputTokens": 10,
+      "cachedTokens": 77298,
+      "outputTokens": 1649,
+      "costUsd": 0.1445655,
+      "durationMs": 37112,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "fireworks/accounts/fireworks/models/deepseek-v4-pro",
+      "workflowSucceeded": true,
+      "inputTokens": 13429,
+      "cachedTokens": 89024,
+      "outputTokens": 2682,
+      "costUsd": 0.0456083,
+      "durationMs": 64428,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 2,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "anthropic/claude-opus-4-8",
+      "workflowSucceeded": true,
+      "inputTokens": 12,
+      "cachedTokens": 100417,
+      "outputTokens": 2625,
+      "costUsd": 0.19630150000000002,
+      "durationMs": 44672,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "fireworks/accounts/fireworks/models/gpt-oss-120b",
+      "workflowSucceeded": true,
+      "inputTokens": 31065,
+      "cachedTokens": 57316,
+      "outputTokens": 949,
+      "costUsd": 0.00608889,
+      "durationMs": 12870,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "fireworks/accounts/fireworks/models/gpt-oss-120b",
+      "workflowSucceeded": true,
+      "inputTokens": 26160,
+      "cachedTokens": 23921,
+      "outputTokens": 936,
+      "costUsd": 0.004844415,
+      "durationMs": 9561,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "fireworks/accounts/fireworks/models/gpt-oss-120b",
+      "workflowSucceeded": true,
+      "inputTokens": 16903,
+      "cachedTokens": 32870,
+      "outputTokens": 770,
+      "costUsd": 0.0034904999999999997,
+      "durationMs": 7920,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "fireworks/accounts/fireworks/models/gpt-oss-120b",
+      "workflowSucceeded": true,
+      "inputTokens": 25886,
+      "cachedTokens": 41179,
+      "outputTokens": 828,
+      "costUsd": 0.004997385,
+      "durationMs": 10953,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 3,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "anthropic/claude-opus-4-8",
+      "workflowSucceeded": true,
+      "inputTokens": 16,
+      "cachedTokens": 126053,
+      "outputTokens": 1878,
+      "costUsd": 0.17396199999999998,
+      "durationMs": 42355,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 2,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "anthropic/claude-sonnet-4-6",
+      "workflowSucceeded": true,
+      "inputTokens": 9,
+      "cachedTokens": 91038,
+      "outputTokens": 2494,
+      "costUsd": 0.1184925,
+      "durationMs": 43987,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "anthropic/claude-sonnet-4-6",
+      "workflowSucceeded": true,
+      "inputTokens": 7,
+      "cachedTokens": 58531,
+      "outputTokens": 1045,
+      "costUsd": 0.0614487,
+      "durationMs": 19281,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "codefix__date-range-off-by-one",
+      "model": "openai/gpt-5.3-codex",
+      "workflowSucceeded": true,
+      "inputTokens": 60528,
+      "cachedTokens": 926464,
+      "outputTokens": 12315,
+      "costUsd": 0.4404652,
+      "durationMs": 228551,
+      "phases": [
+        {
+          "phase": "phase_0",
+          "success": true
+        },
+        {
+          "phase": "guardrails",
+          "success": true
+        },
+        {
+          "phase": "architect",
+          "success": true
+        },
+        {
+          "phase": "executor",
+          "success": true
+        },
+        {
+          "phase": "reviewer",
+          "success": true
+        },
+        {
+          "phase": "pr",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "pr-opened",
+            "ok": true,
+            "detail": "head=lastlight/codefix__date-range-off-by-one base=main title=\"Fix inclusive day count off-by-one for date ranges (#201)\""
+          }
+        ]
+      },
+      "resolved": true,
+      "failToPass": [
+        {
+          "id": "inclusive single day counts as one",
+          "pass": true
+        },
+        {
+          "id": "inclusive three day span counts as three",
+          "pass": true
+        }
+      ],
+      "passToPass": [
+        {
+          "id": "eachDay still lists every inclusive day",
+          "pass": true
+        }
+      ],
+      "model_patch": "",
+      "githubMutations": 1,
+      "tier": "code-fix"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "anthropic/claude-sonnet-4-6",
+      "workflowSucceeded": true,
+      "inputTokens": 9,
+      "cachedTokens": 90898,
+      "outputTokens": 2524,
+      "costUsd": 0.10322715,
+      "durationMs": 44220,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "openai/gpt-5.5",
+      "workflowSucceeded": true,
+      "inputTokens": 11308,
+      "cachedTokens": 43520,
+      "outputTokens": 1609,
+      "costUsd": 0.12657000000000002,
+      "durationMs": 28600,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "openai/gpt-5.5",
+      "workflowSucceeded": true,
+      "inputTokens": 9651,
+      "cachedTokens": 41984,
+      "outputTokens": 1162,
+      "costUsd": 0.104107,
+      "durationMs": 20378,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "anthropic/claude-sonnet-4-6",
+      "workflowSucceeded": true,
+      "inputTokens": 9,
+      "cachedTokens": 86265,
+      "outputTokens": 1681,
+      "costUsd": 0.08276144999999999,
+      "durationMs": 32320,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 3,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "anthropic/claude-haiku-4-5",
+      "workflowSucceeded": true,
+      "inputTokens": 51,
+      "cachedTokens": 50399,
+      "outputTokens": 2325,
+      "costUsd": 0.0335335,
+      "durationMs": 19803,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "openai/gpt-5.5",
+      "workflowSucceeded": true,
+      "inputTokens": 14975,
+      "cachedTokens": 72192,
+      "outputTokens": 1933,
+      "costUsd": 0.168961,
+      "durationMs": 35558,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "anthropic/claude-haiku-4-5",
+      "workflowSucceeded": true,
+      "inputTokens": 51,
+      "cachedTokens": 50012,
+      "outputTokens": 2384,
+      "costUsd": 0.02834225,
+      "durationMs": 22718,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "openai/gpt-5.5",
+      "workflowSucceeded": true,
+      "inputTokens": 13351,
+      "cachedTokens": 77312,
+      "outputTokens": 1254,
+      "costUsd": 0.14303100000000002,
+      "durationMs": 27643,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 10,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "anthropic/claude-haiku-4-5",
+      "workflowSucceeded": true,
+      "inputTokens": 51,
+      "cachedTokens": 49253,
+      "outputTokens": 1943,
+      "costUsd": 0.025603650000000002,
+      "durationMs": 19118,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 4,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "anthropic/claude-haiku-4-5",
+      "workflowSucceeded": true,
+      "inputTokens": 75,
+      "cachedTokens": 77778,
+      "outputTokens": 2475,
+      "costUsd": 0.031567950000000004,
+      "durationMs": 23051,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 9,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "openai/gpt-5.4-mini",
+      "workflowSucceeded": true,
+      "inputTokens": 11436,
+      "cachedTokens": 64000,
+      "outputTokens": 1744,
+      "costUsd": 0.021225,
+      "durationMs": 31053,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "openai/gpt-5.4-mini",
+      "workflowSucceeded": true,
+      "inputTokens": 10282,
+      "cachedTokens": 32768,
+      "outputTokens": 1529,
+      "costUsd": 0.017049599999999998,
+      "durationMs": 16382,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "openai/gpt-5.4-mini",
+      "workflowSucceeded": true,
+      "inputTokens": 13264,
+      "cachedTokens": 70144,
+      "outputTokens": 2249,
+      "costUsd": 0.0253293,
+      "durationMs": 31538,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "openai/gpt-5.4-mini",
+      "workflowSucceeded": true,
+      "inputTokens": 11282,
+      "cachedTokens": 60416,
+      "outputTokens": 1751,
+      "costUsd": 0.0208722,
+      "durationMs": 27339,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 10,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-with-repro-ready",
+      "model": "openai/gpt-5.3-codex",
+      "workflowSucceeded": true,
+      "inputTokens": 10673,
+      "cachedTokens": 55936,
+      "outputTokens": 2099,
+      "costUsd": 0.05785255000000001,
+      "durationMs": 26971,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "category=bug",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          },
+          {
+            "name": "state=ready-for-agent",
+            "ok": true,
+            "detail": "labels=[bug, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__bug-no-repro-needs-info",
+      "model": "openai/gpt-5.3-codex",
+      "workflowSucceeded": true,
+      "inputTokens": 10593,
+      "cachedTokens": 51840,
+      "outputTokens": 1705,
+      "costUsd": 0.051479750000000005,
+      "durationMs": 21329,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "comment~/need|provide|repro|version|steps/",
+            "ok": true,
+            "detail": "1 comment(s)"
+          },
+          {
+            "name": "state=needs-info",
+            "ok": true,
+            "detail": "labels=[bug, needs-info]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__feature-well-specified",
+      "model": "openai/gpt-5.3-codex",
+      "workflowSucceeded": true,
+      "inputTokens": 8938,
+      "cachedTokens": 118784,
+      "outputTokens": 2055,
+      "costUsd": 0.0651987,
+      "durationMs": 35750,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          },
+          {
+            "name": "category=enhancement",
+            "ok": true,
+            "detail": "labels=[enhancement, ready-for-agent]"
+          }
+        ]
+      },
+      "githubMutations": 11,
+      "tier": "triage"
+    },
+    {
+      "instance_id": "triage__pure-question",
+      "model": "openai/gpt-5.3-codex",
+      "workflowSucceeded": true,
+      "inputTokens": 13809,
+      "cachedTokens": 59776,
+      "outputTokens": 1955,
+      "costUsd": 0.061996550000000004,
+      "durationMs": 28248,
+      "phases": [
+        {
+          "phase": "triage",
+          "success": true
+        }
+      ],
+      "behavioral": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "label:question",
+            "ok": true,
+            "detail": "labels=[question]"
+          },
+          {
+            "name": "no-label:ready-for-agent",
+            "ok": true
+          },
+          {
+            "name": "no-label:ready-for-human",
+            "ok": true
+          },
+          {
+            "name": "category=question",
+            "ok": true,
+            "detail": "labels=[question]"
+          }
+        ]
+      },
+      "githubMutations": 10,
+      "tier": "triage"
+    }
+  ]
+}

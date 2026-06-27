@@ -1,0 +1,9 @@
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"anthropic/claude-opus-4-8","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"fireworks/accounts/fireworks/models/glm-5p2","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"openai/gpt-5.5","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"fireworks/accounts/fireworks/models/deepseek-v4-pro","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"fireworks/accounts/fireworks/models/gpt-oss-120b","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"anthropic/claude-sonnet-4-6","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"anthropic/claude-haiku-4-5","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"openai/gpt-5.4-mini","model_patch":""}
+{"instance_id":"codefix__date-range-off-by-one","model_name_or_path":"openai/gpt-5.3-codex","model_patch":""}

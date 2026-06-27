@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<title>Last Light — Eval Scorecard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --gold:#F0B429; --orange:#E8752A; --teal:#1A7A8A; --teal-dark:#135E6B;
+    --navy:#1B2735; --bg:#0C1117; --bg-card:#141B24; --bg-card-hover:#1A2332;
+    --border:#1E2A38; --text:#C9D1D9; --text-muted:#7D8694; --text-bright:#ECEFF4;
+    --pass:#3FB950; --fail:#E5534B;
+    --mono:'JetBrains Mono',monospace; --sans:'Inter',-apple-system,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:var(--sans); line-height:1.55; }
+  .wrap { max-width:1100px; margin:0 auto; padding:48px 24px 80px; }
+  header { border-bottom:1px solid var(--border); padding-bottom:24px; margin-bottom:24px; }
+  h1 { color:var(--text-bright); font-size:30px; margin:0 0 6px; letter-spacing:-0.02em; }
+  h1 .accent { color:var(--gold); }
+  h2 { color:var(--text-bright); font-size:18px; margin:32px 0 14px; }
+  h2 .muted { font-weight:400; }
+  .meta { color:var(--text-muted); font-size:13px; font-family:var(--mono); }
+  .meta b { color:var(--text); font-weight:600; }
+
+  /* radio-driven tabs (no JS) */
+  input[name=tier] { position:absolute; opacity:0; pointer-events:none; }
+  .tabs { display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .tabs label { cursor:pointer; font-family:var(--mono); font-size:13px; font-weight:600;
+    padding:8px 16px; border-radius:8px; border:1px solid var(--border); color:var(--text-muted);
+    background:var(--bg-card); user-select:none; }
+  .tabs label:hover { color:var(--text-bright); border-color:var(--teal); }
+  .pane { display:none; }
+  #t0:checked ~ .pane-0{display:block;} #t0:checked ~ .tabs label[for=t0]{background:var(--gold);color:var(--navy);border-color:var(--gold);}
+  #t1:checked ~ .pane-1{display:block;} #t1:checked ~ .tabs label[for=t1]{background:var(--gold);color:var(--navy);border-color:var(--gold);}
+
+  table { width:100%; border-collapse:collapse; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  th { text-align:left; color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; padding:11px 14px; border-bottom:1px solid var(--border); background:var(--navy); }
+  td { padding:10px 14px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  .mono { font-family:var(--mono); }
+  .num { text-align:right; white-space:nowrap; }
+  .muted { color:var(--text-muted); }
+  .fail-fg { color:var(--fail); }
+
+  /* comparison table */
+  table.cmp td { vertical-align:middle; }
+  .cmp .rank { width:30px; color:var(--text-muted); font-family:var(--mono); text-align:center; }
+  .cmp .model { color:var(--gold); font-weight:600; white-space:nowrap; }
+  .cmp .barcell { width:22%; min-width:140px; }
+  .bar { display:flex; align-items:center; gap:8px; }
+  .bar-track { flex:1; height:8px; background:var(--navy); border-radius:999px; overflow:hidden; }
+  .bar-fill { display:block; height:100%; border-radius:999px; }
+  .fill-gold { background:var(--gold); } .fill-teal { background:var(--teal); } .fill-orange { background:var(--orange); }
+  .bar-val { font-family:var(--mono); font-size:12px; min-width:48px; text-align:right; color:var(--text); }
+  .bar.best .bar-val { color:var(--pass); font-weight:600; }
+  .bar.best .bar-val::after { content:" ★"; color:var(--gold); font-size:10px; }
+
+  .pill { display:inline-block; font-family:var(--mono); font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; }
+  .pill.pass { background:rgba(63,185,80,0.14); color:var(--pass); }
+  .pill.fail { background:rgba(229,83,75,0.14); color:var(--fail); }
+  .pill.na { background:var(--navy); color:var(--text-muted); }
+  .pill.run { background:rgba(240,180,41,0.14); color:var(--gold); animation:pulse 1.4s ease-in-out infinite; }
+  .pill.wait { background:var(--navy); color:var(--text-muted); }
+  .pendingrow td { opacity:0.72; }
+  .frac { font-family:var(--mono); font-size:11px; color:var(--text-muted); }
+  .checks { line-height:2; }
+  .chip { display:inline-block; font-family:var(--mono); font-size:10.5px; padding:2px 7px; border-radius:5px; margin:0 4px 4px 0; border:1px solid var(--border); }
+  .chip.ok { color:var(--pass); border-color:rgba(63,185,80,0.4); }
+  .chip.no { color:var(--fail); border-color:rgba(229,83,75,0.4); }
+  .errrow td { color:var(--fail); background:rgba(229,83,75,0.06); }
+  .err { white-space:pre-wrap; }
+  footer { margin-top:40px; color:var(--text-muted); font-size:12px; font-family:var(--mono); }
+  a { color:var(--gold); }
+  .live { font-family:var(--mono); font-size:13px; color:var(--gold); font-weight:600; letter-spacing:0; vertical-align:middle; margin-left:10px; animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Last Light <span class="accent">·</span> Eval Scorecard</h1>
+      <div class="meta">
+        <b>code-fix + triage</b> &nbsp;·&nbsp;
+        models: <b>GPT-5.5, GPT-5.4 mini, GPT-5.3 Codex, Claude Opus 4.8, Claude Sonnet 4.6, Claude Haiku 4.5, GLM-5.2, DeepSeek V4 Pro, GPT-OSS 120B</b> &nbsp;·&nbsp;
+        45 cases &nbsp;·&nbsp;
+        2026-06-27T16:56:50.676Z
+      </div>
+    </header>
+
+    <div class="tabwrap">
+      <input type="radio" name="tier" id="t0" checked>
+  <input type="radio" name="tier" id="t1">
+      <nav class="tabs">
+      <label for="t0">code-fix</label>
+      <label for="t1">triage</label>
+      </nav>
+    <section class="pane pane-0">
+      <h2>Model comparison <span class="muted">— code-fix</span></h2>
+      
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th class="rank">#</th><th>model</th>
+          <th>resolved →</th><th>total cost ↓</th><th>p50 latency ↓</th>
+          <th class="num">avg in/cached/out tok</th><th class="num">err</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="rank">1</td>
+        <td class="mono model">GPT-5.4 mini</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">1/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:14.8%"></span></span><span class="bar-val">$0.220</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:100.0%"></span></span><span class="bar-val">5m34</span></div></td>
+        <td class="mono num">77k<span class="muted">/</span>957k<span class="muted">/</span>20k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">2</td>
+        <td class="mono model">Claude Haiku 4.5</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">1/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:22.4%"></span></span><span class="bar-val">$0.333</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:74.3%"></span></span><span class="bar-val">4m08</span></div></td>
+        <td class="mono num">857<span class="muted">/</span>1353k<span class="muted">/</span>22k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">3</td>
+        <td class="mono model">GLM-5.2</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">1/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:23.1%"></span></span><span class="bar-val">$0.344</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:58.4%"></span></span><span class="bar-val">3m15</span></div></td>
+        <td class="mono num">131k<span class="muted">/</span>468k<span class="muted">/</span>8.8k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">4</td>
+        <td class="mono model">GPT-5.3 Codex</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">1/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:29.6%"></span></span><span class="bar-val">$0.440</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:68.4%"></span></span><span class="bar-val">3m49</span></div></td>
+        <td class="mono num">61k<span class="muted">/</span>926k<span class="muted">/</span>12k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">5</td>
+        <td class="mono model">Claude Sonnet 4.6</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">1/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:34.2%"></span></span><span class="bar-val">$0.509</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:57.0%"></span></span><span class="bar-val">3m10</span></div></td>
+        <td class="mono num">49<span class="muted">/</span>648k<span class="muted">/</span>9.7k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">6</td>
+        <td class="mono model">Claude Opus 4.8</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">1/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:61.8%"></span></span><span class="bar-val">$0.919</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:56.7%"></span></span><span class="bar-val">3m09</span></div></td>
+        <td class="mono num">73<span class="muted">/</span>691k<span class="muted">/</span>10k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">7</td>
+        <td class="mono model">GPT-5.5</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">1/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:100.0%"></span></span><span class="bar-val">$1.488</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:95.7%"></span></span><span class="bar-val">5m20</span></div></td>
+        <td class="mono num">128k<span class="muted">/</span>826k<span class="muted">/</span>14k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">8</td>
+        <td class="mono model">GPT-OSS 120B</td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-gold" style="width:0.0%"></span></span><span class="bar-val">0/1</span></div></td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-teal" style="width:0.5%"></span></span><span class="bar-val">$0.008</span></div></td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-orange" style="width:8.9%"></span></span><span class="bar-val">30s</span></div></td>
+        <td class="mono num">30k<span class="muted">/</span>158k<span class="muted">/</span>1.8k</td>
+        <td class="mono num fail-fg">1</td>
+      </tr>
+
+      <tr>
+        <td class="rank">9</td>
+        <td class="mono model">DeepSeek V4 Pro</td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-gold" style="width:0.0%"></span></span><span class="bar-val">0/1</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:9.5%"></span></span><span class="bar-val">$0.141</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:44.1%"></span></span><span class="bar-val">2m27</span></div></td>
+        <td class="mono num">40k<span class="muted">/</span>300k<span class="muted">/</span>7.7k</td>
+        <td class="mono num fail-fg">1</td>
+      </tr></tbody>
+    </table>
+      <h2>Per-instance results</h2>
+      <table>
+        <thead><tr><th>instance</th><th>model</th><th>code-fix</th><th>behavioral</th><th>checks</th><th>cost</th><th>latency</th></tr></thead>
+        <tbody>
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">Claude Opus 4.8</td>
+        <td><span class="pill pass">resolved</span></td>
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="head=lastlight/codefix__date-range-off-by-one base=main title=&quot;Fix off-by-one in inclusiveDayCount (#201)&quot;">pr-opened</span></td>
+        <td class="mono num">$0.9187</td>
+        <td class="mono num">3m09</td>
+      </tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">GLM-5.2</td>
+        <td><span class="pill pass">resolved</span></td>
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="head=lastlight/codefix__date-range-off-by-one base=main title=&quot;Fix off-by-one in inclusiveDayCount (#201)&quot;">pr-opened</span></td>
+        <td class="mono num">$0.3439</td>
+        <td class="mono num">3m15</td>
+      </tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">GPT-5.5</td>
+        <td><span class="pill pass">resolved</span></td>
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="head=lastlight/codefix__date-range-off-by-one base=main title=&quot;Fix inclusive date range off-by-one (#201)&quot;">pr-opened</span></td>
+        <td class="mono num">$1.4876</td>
+        <td class="mono num">5m20</td>
+      </tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">DeepSeek V4 Pro</td>
+        <td><span class="pill fail">unresolved</span></td>
+        <td><span class="pill fail">error</span></td>
+        <td class="checks"><span class="chip no" title="0 PR(s)">pr-opened</span></td>
+        <td class="mono num">$0.1407</td>
+        <td class="mono num">2m27</td>
+      </tr><tr class="errrow"><td colspan="7" class="mono err">guardrails: BLOCKED</td></tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">GPT-OSS 120B</td>
+        <td><span class="pill fail">unresolved</span></td>
+        <td><span class="pill fail">error</span></td>
+        <td class="checks"><span class="chip no" title="0 PR(s)">pr-opened</span></td>
+        <td class="mono num">$0.0080</td>
+        <td class="mono num">30s</td>
+      </tr><tr class="errrow"><td colspan="7" class="mono err">guardrails: BLOCKED</td></tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">Claude Sonnet 4.6</td>
+        <td><span class="pill pass">resolved</span></td>
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="head=lastlight/codefix__date-range-off-by-one base=main title=&quot;Fix off-by-one in inclusiveDayCount (#201)&quot;">pr-opened</span></td>
+        <td class="mono num">$0.5093</td>
+        <td class="mono num">3m10</td>
+      </tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">Claude Haiku 4.5</td>
+        <td><span class="pill pass">resolved</span></td>
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="head=lastlight/codefix__date-range-off-by-one base=main title=&quot;Fix off-by-one error in inclusiveDayCount (#201)&quot;">pr-opened</span></td>
+        <td class="mono num">$0.3334</td>
+        <td class="mono num">4m08</td>
+      </tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">GPT-5.4 mini</td>
+        <td><span class="pill pass">resolved</span></td>
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="head=lastlight/codefix__date-range-off-by-one base=main title=&quot;Fix inclusive date-range counting off by one (#201)&quot;">pr-opened</span></td>
+        <td class="mono num">$0.2196</td>
+        <td class="mono num">5m34</td>
+      </tr>
+
+      <tr>
+        <td class="mono">codefix__date-range-off-by-one</td>
+        <td class="mono muted">GPT-5.3 Codex</td>
+        <td><span class="pill pass">resolved</span></td>
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="head=lastlight/codefix__date-range-off-by-one base=main title=&quot;Fix inclusive day count off-by-one for date ranges (#201)&quot;">pr-opened</span></td>
+        <td class="mono num">$0.4405</td>
+        <td class="mono num">3m49</td>
+      </tr></tbody>
+      </table></section>
+    <section class="pane pane-1">
+      <h2>Model comparison <span class="muted">— triage</span></h2>
+      
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th class="rank">#</th><th>model</th>
+          <th>behavioral →</th><th>total cost ↓</th><th>p50 latency ↓</th>
+          <th class="num">avg in/cached/out tok</th><th class="num">err</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td class="rank">1</td>
+        <td class="mono model">GPT-OSS 120B</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-teal" style="width:2.6%"></span></span><span class="bar-val">$0.019</span></div></td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-orange" style="width:17.0%"></span></span><span class="bar-val">11s</span></div></td>
+        <td class="mono num">25k<span class="muted">/</span>39k<span class="muted">/</span>871</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">2</td>
+        <td class="mono model">GPT-5.4 mini</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:11.2%"></span></span><span class="bar-val">$0.084</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:48.2%"></span></span><span class="bar-val">31s</span></div></td>
+        <td class="mono num">12k<span class="muted">/</span>57k<span class="muted">/</span>1.8k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">3</td>
+        <td class="mono model">Claude Haiku 4.5</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:15.8%"></span></span><span class="bar-val">$0.119</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:35.3%"></span></span><span class="bar-val">23s</span></div></td>
+        <td class="mono num">57<span class="muted">/</span>57k<span class="muted">/</span>2.3k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">4</td>
+        <td class="mono model">DeepSeek V4 Pro</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:22.7%"></span></span><span class="bar-val">$0.171</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:100.0%"></span></span><span class="bar-val">1m04</span></div></td>
+        <td class="mono num">14k<span class="muted">/</span>61k<span class="muted">/</span>2.8k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">5</td>
+        <td class="mono model">GLM-5.2</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:30.7%"></span></span><span class="bar-val">$0.231</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:66.9%"></span></span><span class="bar-val">43s</span></div></td>
+        <td class="mono num">23k<span class="muted">/</span>70k<span class="muted">/</span>1.6k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">6</td>
+        <td class="mono model">GPT-5.3 Codex</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:31.4%"></span></span><span class="bar-val">$0.237</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:43.8%"></span></span><span class="bar-val">28s</span></div></td>
+        <td class="mono num">11k<span class="muted">/</span>72k<span class="muted">/</span>2.0k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">7</td>
+        <td class="mono model">Claude Sonnet 4.6</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:48.6%"></span></span><span class="bar-val">$0.366</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:68.3%"></span></span><span class="bar-val">44s</span></div></td>
+        <td class="mono num">9<span class="muted">/</span>82k<span class="muted">/</span>1.9k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">8</td>
+        <td class="mono model">GPT-5.5</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:72.1%"></span></span><span class="bar-val">$0.543</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:44.4%"></span></span><span class="bar-val">29s</span></div></td>
+        <td class="mono num">12k<span class="muted">/</span>59k<span class="muted">/</span>1.5k</td>
+        <td class="mono num muted">0</td>
+      </tr>
+
+      <tr>
+        <td class="rank">9</td>
+        <td class="mono model">Claude Opus 4.8</td>
+        <td class="barcell"><div class="bar best"><span class="bar-track"><span class="bar-fill fill-gold" style="width:100.0%"></span></span><span class="bar-val">4/4</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-teal" style="width:100.0%"></span></span><span class="bar-val">$0.753</span></div></td>
+        <td class="barcell"><div class="bar"><span class="bar-track"><span class="bar-fill fill-orange" style="width:67.4%"></span></span><span class="bar-val">43s</span></div></td>
+        <td class="mono num">12<span class="muted">/</span>97k<span class="muted">/</span>2.3k</td>
+        <td class="mono num muted">0</td>
+      </tr></tbody>
+    </table>
+      <h2>Per-instance results</h2>
+      <table>
+        <thead><tr><th>instance</th><th>model</th><th>behavioral</th><th>checks</th><th>cost</th><th>latency</th></tr></thead>
+        <tbody>
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">GLM-5.2</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.0438</td>
+        <td class="mono num">28s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">GLM-5.2</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.0372</td>
+        <td class="mono num">20s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">GLM-5.2</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.0922</td>
+        <td class="mono num">54s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">GLM-5.2</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.0578</td>
+        <td class="mono num">43s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">DeepSeek V4 Pro</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.0419</td>
+        <td class="mono num">1m06</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">DeepSeek V4 Pro</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.0373</td>
+        <td class="mono num">46s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">Claude Opus 4.8</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.2381</td>
+        <td class="mono num">43s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">DeepSeek V4 Pro</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.0459</td>
+        <td class="mono num">53s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">Claude Opus 4.8</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.1446</td>
+        <td class="mono num">37s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">DeepSeek V4 Pro</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.0456</td>
+        <td class="mono num">1m04</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">Claude Opus 4.8</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.1963</td>
+        <td class="mono num">45s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">GPT-OSS 120B</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.0061</td>
+        <td class="mono num">13s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">GPT-OSS 120B</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.0048</td>
+        <td class="mono num">10s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">GPT-OSS 120B</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.0035</td>
+        <td class="mono num">8s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">GPT-OSS 120B</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.0050</td>
+        <td class="mono num">11s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">Claude Opus 4.8</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.1740</td>
+        <td class="mono num">42s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">Claude Sonnet 4.6</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.1185</td>
+        <td class="mono num">44s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">Claude Sonnet 4.6</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.0614</td>
+        <td class="mono num">19s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">Claude Sonnet 4.6</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.1032</td>
+        <td class="mono num">44s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">GPT-5.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.1266</td>
+        <td class="mono num">29s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">GPT-5.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.1041</td>
+        <td class="mono num">20s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">Claude Sonnet 4.6</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.0828</td>
+        <td class="mono num">32s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">Claude Haiku 4.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.0335</td>
+        <td class="mono num">20s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">GPT-5.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.1690</td>
+        <td class="mono num">36s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">Claude Haiku 4.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.0283</td>
+        <td class="mono num">23s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">GPT-5.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.1430</td>
+        <td class="mono num">28s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">Claude Haiku 4.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.0256</td>
+        <td class="mono num">19s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">Claude Haiku 4.5</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.0316</td>
+        <td class="mono num">23s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">GPT-5.4 mini</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.0212</td>
+        <td class="mono num">31s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">GPT-5.4 mini</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.0170</td>
+        <td class="mono num">16s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">GPT-5.4 mini</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.0253</td>
+        <td class="mono num">32s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">GPT-5.4 mini</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.0209</td>
+        <td class="mono num">27s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-with-repro-ready</td>
+        <td class="mono muted">GPT-5.3 Codex</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, ready-for-agent]">label:bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">category=bug</span><span class="chip ok" title="labels=[bug, ready-for-agent]">state=ready-for-agent</span></td>
+        <td class="mono num">$0.0579</td>
+        <td class="mono num">27s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__bug-no-repro-needs-info</td>
+        <td class="mono muted">GPT-5.3 Codex</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[bug, needs-info]">label:needs-info</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="1 comment(s)">comment~/need|provide|repro|version|steps/</span><span class="chip ok" title="labels=[bug, needs-info]">state=needs-info</span></td>
+        <td class="mono num">$0.0515</td>
+        <td class="mono num">21s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__feature-well-specified</td>
+        <td class="mono muted">GPT-5.3 Codex</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[enhancement, ready-for-agent]">label:enhancement</span><span class="chip ok" title="labels=[enhancement, ready-for-agent]">category=enhancement</span></td>
+        <td class="mono num">$0.0652</td>
+        <td class="mono num">36s</td>
+      </tr>
+
+      <tr>
+        <td class="mono">triage__pure-question</td>
+        <td class="mono muted">GPT-5.3 Codex</td>
+        
+        <td><span class="pill pass">ok</span></td>
+        <td class="checks"><span class="chip ok" title="labels=[question]">label:question</span><span class="chip ok" title="">no-label:ready-for-agent</span><span class="chip ok" title="">no-label:ready-for-human</span><span class="chip ok" title="labels=[question]">category=question</span></td>
+        <td class="mono num">$0.0620</td>
+        <td class="mono num">28s</td>
+      </tr></tbody>
+      </table></section>
+    </div>
+
+    <footer>
+      Real production workflows · mocked GitHub · deterministic grading. ★ = best in column.
+      Generated by <span class="mono">npm run eval</span>. Also: scorecard.json · predictions.jsonl.
+    </footer>
+  </div>
+  <script>
+    // Preserve the active tab + scroll position across the live auto-refresh.
+    (function () {
+      try {
+        var K = "ll-eval-tab", S = "ll-eval-scroll";
+        var saved = sessionStorage.getItem(K);
+        if (saved) { var r = document.getElementById(saved); if (r) r.checked = true; }
+        document.querySelectorAll('input[name=tier]').forEach(function (radio) {
+          radio.addEventListener("change", function () { sessionStorage.setItem(K, radio.id); });
+        });
+        var y = sessionStorage.getItem(S);
+        if (y) window.scrollTo(0, parseInt(y, 10) || 0);
+        window.addEventListener("scroll", function () { sessionStorage.setItem(S, String(window.scrollY)); }, { passive: true });
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>
