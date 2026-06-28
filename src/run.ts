@@ -35,6 +35,30 @@ import { discoverTiers, loadInstances, workflowFor, type Tier } from "./discover
 import { builtinDatasetsRoot, resultsRoot } from "./paths.js";
 import { runInit } from "./init.js";
 
+/** Minimal subset of the clack spinner we use. */
+interface Spinner {
+  start: (msg?: string) => void;
+  message: (msg?: string) => void;
+  stop: (msg?: string) => void;
+}
+
+/**
+ * A clack spinner in a TTY; in non-TTY (CI / piped / agent) a quiet stub that
+ * drops the animation frames — which redraw dozens of times and shred piped logs
+ * — and emits only the final `stop()` line. The plan note already prints what's
+ * about to run, so dropping the in-progress frames loses nothing in automation.
+ */
+function makeSpinner(): Spinner {
+  if (process.stdout.isTTY) return p.spinner() as Spinner;
+  return {
+    start: () => {},
+    message: () => {},
+    stop: (msg?: string) => {
+      if (msg) p.log.message(msg);
+    },
+  };
+}
+
 /** Open a file in the OS default browser (best-effort, never throws). */
 function openInBrowser(file: string): void {
   const url = `file://${file}`;
@@ -153,7 +177,12 @@ async function runEval(): Promise<number> {
   // Asset roots FIRST — before any getWorkflow/runWorkflow. `--overlay` (or
   // LASTLIGHT_OVERLAY_DIR) layers a deployment's own workflows/skills over the
   // built-ins, and also contributes its `evals/datasets/` (see discovery).
-  const overlayDir = strFlag("overlay") ?? process.env.LASTLIGHT_OVERLAY_DIR;
+  // With neither set, auto-detect a local `./instance/` overlay checkout — the
+  // Separate layout `init --clone` produces — so a bare run "just works".
+  const autoInstance = join(process.cwd(), "instance");
+  const autoOverlay = existsSync(join(autoInstance, "config.yaml")) ? autoInstance : undefined;
+  const overlayDir = strFlag("overlay") ?? process.env.LASTLIGHT_OVERLAY_DIR ?? autoOverlay;
+  if (overlayDir === autoOverlay && autoOverlay) p.log.info(`overlay → ${chalk.cyan("./instance")} ${chalk.dim("(auto-detected)")}`);
   bootstrapAssets({ overlayDir });
 
   // A user/overlay can ship its own model registry too: explicit --models-file
@@ -162,8 +191,12 @@ async function runEval(): Promise<number> {
   const modelsFile = strFlag("models-file") ?? (overlayModels && existsSync(overlayModels) ? overlayModels : undefined);
   if (modelsFile) setModelsPath(modelsFile);
 
-  // Discover tiers across built-in + user (--datasets) + overlay roots.
-  const userDatasetsDir = strFlag("datasets") ?? process.env.LASTLIGHT_EVALS_DATASETS;
+  // Discover tiers across built-in + user (--datasets) + overlay roots. With no
+  // explicit `--datasets`, default to the workspace's own `./evals/datasets`
+  // (what `init` seeds) so editing/adding tiers there is picked up automatically.
+  const autoDatasets = join(process.cwd(), "evals", "datasets");
+  const userDatasetsDir =
+    strFlag("datasets") ?? process.env.LASTLIGHT_EVALS_DATASETS ?? (existsSync(autoDatasets) ? autoDatasets : undefined);
   const discovered = discoverTiers({
     builtinRoot: builtinDatasetsRoot(),
     userDatasetsDir,
@@ -416,7 +449,7 @@ async function runEval(): Promise<number> {
         });
         return `${chalk.dim(`${completed}/${total}`)}  ${segs.join(chalk.dim(" · "))}`;
       };
-      const s = p.spinner();
+      const s = makeSpinner();
       s.start(status());
       const restoreConsole = silenceConsole();
       const verdicts: string[] = [];
@@ -450,7 +483,7 @@ async function runEval(): Promise<number> {
       // Serial: one spinner per case (updates per trial) + a verdict line.
       for (let i = 0; i < work.length; i++) {
         const w = work[i];
-        const s = p.spinner();
+        const s = makeSpinner();
         const head = `${chalk.dim(`[${i + 1}/${work.length}]`)} ${chalk.cyan(w.tierName)}/${w.inst.instance_id}  ${chalk.dim(labels[w.model] ?? w.model)}`;
         s.start(head);
 
@@ -530,12 +563,37 @@ function runReport(dir?: string): number {
   return 0;
 }
 
+const USAGE = `lastlight-evals — eval harness for Last Light workflows
+
+Usage:
+  lastlight-evals [run] [tiers...] [options]   Run evals (default command)
+  lastlight-evals init [dir] [options]         Scaffold an overlay+evals workspace
+  lastlight-evals report <results-dir>         Re-render index.html from scorecard.json
+
+Run options:
+  --overlay <dir>      Layer a deployment's workflows/skills + evals/ over built-ins
+  --model <m[,m2]>     Model(s) to run (fuzzy-matched against models.json)
+  --compare            Cross-vendor set (only models whose provider key is present)
+  --runs <n>           Repeat each case n× (worst-case verdict, mean metrics)
+  --serial             Force serial execution across provider families
+  --datasets <dir>     Extra datasets root to discover tiers from
+  --models-file <f>    Use an explicit models.json
+  --no-open            Don't open the HTML report (also implied by CI=1)
+
+Run \`lastlight-evals init --help\` for init-specific flags.
+GitHub is mocked end-to-end — no real GitHub token is needed, only a provider key.`;
+
 /** Top-level subcommand dispatcher: `run` (default) | `init` | `report`. */
 async function main(): Promise<number> {
   const sub = process.argv[2];
+  // Top-level help — only when it's not standing in for a `run` tier name.
+  if (sub === "help" || sub === "--help" || sub === "-h") {
+    console.log(USAGE);
+    return 0;
+  }
   if (sub === "init") {
-    // `init [dir]` — scaffold a fresh overlay+evals repo.
-    return runInit(process.argv[3]);
+    // `init [dir] [flags]` — scaffold a fresh overlay+evals repo.
+    return runInit(process.argv.slice(3));
   }
   if (sub === "report") {
     // `report <dir>` — re-render index.html from a saved scorecard.json.
