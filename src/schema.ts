@@ -92,6 +92,26 @@ export interface PhaseMetric {
   durationMs?: number;
 }
 
+/** One workflow phase's archived agent session, for the dashboard log viewer. */
+export interface PhaseSession {
+  /** Workflow node name (e.g. `guardrails`, `architect`, `build`; `issue-triage`
+   * for the single-phase triage workflow). */
+  phase: string;
+  success?: boolean;
+  /** Relative path (under the run dir) of this phase's session jsonl. */
+  log: string;
+}
+
+/** One trial's archived session: the per-phase logs plus a `full` consolidated
+ * transcript (the whole agent run across phases, also used for live-follow). */
+export interface TrialSession {
+  /** 1-based trial index (>1 only when `--runs N`). */
+  trial: number;
+  /** Relative path of the consolidated transcript across all phases. */
+  full?: string;
+  phases: PhaseSession[];
+}
+
 export interface InstanceResult {
   instance_id: string;
   model: string;
@@ -118,6 +138,14 @@ export interface InstanceResult {
   githubMutations?: number;
   /** SWE-bench predictions: unified diff of the agent's edits. */
   model_patch?: string;
+  /** Archived agent sessions for this case — one {@link TrialSession} per trial
+   * (`--runs N` keeps them all), each split per workflow phase. The dashboard
+   * resolves the relative paths against the run's scorecard URL to render the
+   * transcript. Absent if no log was captured. */
+  sessions?: TrialSession[];
+  /** Set on a single trial's result by run-instance (one trial = one
+   * TrialSession); the runner folds these into {@link sessions}. */
+  sessionTrial?: TrialSession;
   /** Aggregate metrics across phases. */
   inputTokens: number;
   /** Cached prompt tokens (Anthropic cache read + creation), tracked separately

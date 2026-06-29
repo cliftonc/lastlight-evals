@@ -6,6 +6,7 @@ import { fmtDate, modelLabel } from "../lib/format";
 import { summarizeModels } from "../lib/summarize";
 import { CompareTable } from "./CompareTable";
 import { InstanceTable } from "./InstanceTable";
+import { LiveBadge } from "./ui";
 
 /** One run's full scorecard: tier tabs, each with a model-comparison table and
  * the per-instance detail rows. Live runs poll + show running/queued rows. */
@@ -40,11 +41,7 @@ export function RunView({ run }: { run: IndexRun }) {
       <header className="mb-6 border-b border-base-300 pb-5">
         <h1 className="text-2xl font-semibold text-base-content">
           Eval Scorecard
-          {run.live && (
-            <span className="ll-pulse ml-3 align-middle font-mono text-sm font-semibold text-accent">
-              ● live{run.progress ? ` ${run.progress}` : ""}
-            </span>
-          )}
+          <LiveBadge run={run} className="ml-3 align-middle font-mono" size="sm" />
         </h1>
         <div className="mt-1.5 font-mono text-xs text-base-content/50">
           <b className="font-semibold text-base-content">{tiers.join(" + ")}</b> &nbsp;·&nbsp; models:{" "}
@@ -98,7 +95,7 @@ export function RunView({ run }: { run: IndexRun }) {
           <CompareTable models={models} tier={tier} labels={labels} />
 
           <h2 className="mb-3.5 mt-8 text-lg font-semibold text-base-content">Per-instance results</h2>
-          <InstanceTable tier={tier} results={tierResults} pending={tierPending} labels={labels} />
+          <InstanceTable tier={tier} results={tierResults} pending={tierPending} labels={labels} scorecardUrl={run.scorecard} />
         </>
       )}
     </div>

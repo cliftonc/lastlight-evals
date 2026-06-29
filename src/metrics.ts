@@ -57,6 +57,92 @@ export async function drainSessions(sessionsDir: string, maxMs = 4000, quietMs =
   }
 }
 
+/** One session jsonl file the shim wrote (`projects/<slug>/<sessionId>.jsonl`),
+ * with the timestamp of its first line — used to bucket each session into the
+ * workflow phase whose window it falls in. */
+export interface SessionFileInfo {
+  file: string;
+  /** ms epoch of the first line's `timestamp` (0 if none parseable). */
+  firstTs: number;
+}
+
+/** Enumerate the run's session jsonl files (one per sessionId / phase / sub-agent
+ * run), each with its first-line timestamp, sorted chronologically. The harness
+ * maps these to workflow phases by start-time window (see run-instance). */
+export function listSessionFiles(sessionsDir: string): SessionFileInfo[] {
+  const files: string[] = [];
+  walkJsonl(join(sessionsDir, "projects"), files);
+  walkJsonl(sessionsDir, files);
+  const seen = new Set<string>();
+  const out: SessionFileInfo[] = [];
+  for (const file of files) {
+    if (seen.has(file)) continue;
+    seen.add(file);
+    let firstTs = 0;
+    try {
+      for (const line of readFileSync(file, "utf8").split("\n")) {
+        const t = line.trim();
+        if (!t) continue;
+        try {
+          const o = JSON.parse(t) as { timestamp?: string | number };
+          if (o.timestamp != null) {
+            firstTs = typeof o.timestamp === "number" ? o.timestamp * 1000 : Date.parse(o.timestamp);
+            break;
+          }
+        } catch {
+          /* keep scanning */
+        }
+      }
+    } catch {
+      /* unreadable — leave firstTs 0 */
+    }
+    out.push({ file, firstTs });
+  }
+  return out.sort((a, b) => a.firstTs - b.firstTs);
+}
+
+/** Concatenate the given jsonl files (already in order) into one raw jsonl
+ * string. Best-effort: an unreadable file contributes nothing. */
+export function concatJsonl(files: string[]): string {
+  const chunks: string[] = [];
+  for (const f of files) {
+    try {
+      const text = readFileSync(f, "utf8").trim();
+      if (text) chunks.push(text);
+    } catch {
+      /* skip */
+    }
+  }
+  return chunks.length ? chunks.join("\n") + "\n" : "";
+}
+
+/**
+ * Concatenate every session jsonl under a run's sessions dir into one raw jsonl
+ * string (stable phase order by path, de-duplicated), for archiving alongside
+ * the run + later rendering in the dashboard. Each run uses a fresh temp
+ * `stateDir`, so all jsonl under it belong to that one instance — no slug
+ * matching needed (the same set `collectMetrics` reads). Best-effort: an
+ * unreadable file just contributes nothing.
+ */
+export function readSessionLog(sessionsDir: string): string {
+  const files: string[] = [];
+  walkJsonl(join(sessionsDir, "projects"), files);
+  walkJsonl(sessionsDir, files);
+  const seen = new Set<string>();
+  const chunks: string[] = [];
+  for (const file of [...files].sort()) {
+    if (seen.has(file)) continue;
+    seen.add(file);
+    try {
+      const text = readFileSync(file, "utf8").trim();
+      if (text) chunks.push(text);
+    } catch {
+      /* best-effort */
+    }
+  }
+  return chunks.length ? chunks.join("\n") + "\n" : "";
+}
+
 function walkJsonl(dir: string, out: string[]): void {
   if (!existsSync(dir)) return;
   for (const name of readdirSync(dir, { withFileTypes: true })) {

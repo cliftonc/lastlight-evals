@@ -26,7 +26,7 @@ import * as p from "@clack/prompts";
 import chalk from "chalk";
 
 import { loadDotEnv, hasProviderKey, evalModels, compareModels, modelLabels, resolveModel, setModelsPath } from "./env.js";
-import { runInstance, applyEvalEnv } from "./run-instance.js";
+import { runInstance, applyEvalEnv, slug } from "./run-instance.js";
 import {
   summarize,
   writeArtifacts,
@@ -36,7 +36,7 @@ import {
   type PendingCase,
   type Scorecard,
 } from "./report.js";
-import type { SweBenchInstance, InstanceResult } from "./schema.js";
+import type { SweBenchInstance, InstanceResult, TrialSession } from "./schema.js";
 import { bootstrapAssets } from "./bootstrap.js";
 import { discoverTiers, loadInstances, workflowFor, type Tier } from "./discovery.js";
 import { builtinDatasetsRoot, tierResultsDir, makeRunId, gitShortSha, resultsRoot, dashboardDistRoot } from "./paths.js";
@@ -366,25 +366,37 @@ async function runEval(): Promise<number> {
   }
   const parallel = !process.argv.includes("--serial") && byFamily.size > 1;
 
-  // Each run gets its own timestamped subdir under the tier-combo dir, so runs
-  // accumulate instead of overwriting. The dashboard server indexes the whole
-  // tree; the tier dir is the `tiersKey` segment the SPA routes on.
-  const tiersKey = `${tiers.join("+")}${compare ? "-compare" : ""}`;
-  const tierDir = tierResultsDir(tiersKey);
+  // Each tier writes its OWN folder + scorecard (all sharing this run's id), so
+  // tiers stay separate in the dashboard instead of collapsing into one combined
+  // `<a+b>` entry. A single invocation appears as the same run under each tier it
+  // touched. The `-compare` suffix keeps cross-vendor runs on their own trend
+  // line, distinct from single-model runs of the same tier. The dashboard server
+  // indexes the whole tree; each tier dir is a `tierKey` segment the SPA routes on.
   const gitSha = gitShortSha();
-  const runId = makeRunId(new Date(), gitSha, tierDir);
-  const resultsDir = join(tierDir, runId);
-  // Run-level metadata stamped into every scorecard write (the dashboard reads
-  // its identity, labels, and live state straight off disk). `live`/`progress`/
-  // `pending`/`generatedAt` are layered on per write.
-  const baseMeta: Omit<RunMeta, "generatedAt"> = {
+  const tierKeyFor = (tier: string) => `${tier}${compare ? "-compare" : ""}`;
+  // One shared runId, checked free in the first tier's dir (collisions in the
+  // same second across runs are what the suffix guards — rare, one dir suffices).
+  const runId = makeRunId(new Date(), gitSha, tierResultsDir(tierKeyFor(tiers[0])));
+  const resultsDirFor = (tier: string) => join(tierResultsDir(tierKeyFor(tier)), runId);
+  // Each case's session logs live under `sessions/<id>__<model>/trial-<N>/`
+  // (relative to the tier run dir) — the model is in the name since several
+  // models share a run dir; per-trial keeps every `--runs N` trial. `full.jsonl`
+  // is the consolidated live-followable transcript; `NN-<phase>.jsonl` are the
+  // per-phase splits written when the trial finishes.
+  const caseRelFor = (instanceId: string, model: string) => `sessions/${slug(instanceId)}__${slug(model)}`;
+  const trialRelFor = (instanceId: string, model: string, trial: number) =>
+    `${caseRelFor(instanceId, model)}/trial-${trial}`;
+  // Per-tier run metadata stamped into every scorecard write (the dashboard reads
+  // identity, labels, and live state straight off disk). `live`/`progress`/
+  // `pending`/`generatedAt` are layered on per write; `tiers` is the single tier.
+  const baseMetaFor = (tier: string): Omit<RunMeta, "generatedAt"> => ({
     runId,
-    tiers,
+    tiers: [tier],
     models: entries.map((e) => labels[e.id] ?? e.id),
     runs,
     gitSha,
     labels,
-  };
+  });
 
   p.note(
     `${chalk.bold("mode")}    ${mode}${
@@ -403,15 +415,20 @@ async function runEval(): Promise<number> {
   // `total` counts individual trials so live progress advances per model call.
   const total = work.length * runs;
 
-  // Seed an empty live scorecard so the dashboard has something to poll, then
-  // start the server and open the SPA deep-linked at this run. The server is
+  // Seed an empty live scorecard per tier so the dashboard has something to poll,
+  // then start the server and open the SPA deep-linked at this run. The server is
   // skipped entirely when not opening (CI / --no-open) — we only write JSON.
-  writeScorecard(resultsDir, withMeta(summarize([]), { ...baseMeta, generatedAt: new Date().toISOString(), live: true, progress: `0/${total}` }));
+  for (const tier of tiers) {
+    writeScorecard(
+      resultsDirFor(tier),
+      withMeta(summarize([]), { ...baseMetaFor(tier), generatedAt: new Date().toISOString(), live: true, progress: `0/${total}` }),
+    );
+  }
   let server: RunningServer | undefined;
   if (!noOpen) {
     try {
       server = await startServer({ resultsRoot: resultsRoot(), dashboardRoot: dashboardDistRoot() });
-      const runUrl = `${server.url}/#/${encodeURIComponent(tiersKey)}/${encodeURIComponent(runId)}`;
+      const runUrl = `${server.url}/#/${encodeURIComponent(tierKeyFor(tiers[0]))}/${encodeURIComponent(runId)}`;
       openInBrowser(runUrl);
       p.log.info(`Live dashboard → ${chalk.cyan(runUrl)}`);
     } catch (err) {
@@ -426,50 +443,77 @@ async function runEval(): Promise<number> {
   // Track in-flight cases so the live report can show running / queued rows.
   const caseKey = (tier: string, model: string, id: string) => `${tier}|${model}|${id}`;
   const running = new Set<string>();
+  // Current trial number per running case, so the live "follow" link points at
+  // the right `trial-<N>/full.jsonl` (matters only for `--runs N>1`).
+  const trialOf = new Map<string, number>();
 
   // writeScorecard/summarize/all.push run synchronously to completion inside one
   // event-loop turn, so even with concurrent families they never interleave; the
   // temp-file+rename keeps a polling dashboard from reading a half-written file.
   const refresh = () => {
     const done = new Set(all.map((r) => caseKey(r.tier ?? "", r.model, r.instance_id)));
-    const pending: PendingCase[] = work
-      .map((w) => ({ w, k: caseKey(w.tierName, w.model, w.inst.instance_id) }))
-      .filter(({ k }) => !done.has(k))
-      .map(({ w, k }) => ({
-        tier: w.tierName,
-        model: w.model,
-        instance_id: w.inst.instance_id,
-        status: running.has(k) ? "running" : "pending",
-      }));
-    writeScorecard(
-      resultsDir,
-      withMeta(summarize(all), {
-        ...baseMeta,
-        generatedAt: new Date().toISOString(),
-        live: true,
-        progress: `${completed}/${total}`,
-        pending,
-      }),
-    );
+    const now = new Date().toISOString();
+    for (const tier of tiers) {
+      const tierResults = all.filter((r) => (r.tier ?? "") === tier);
+      const pending: PendingCase[] = work
+        .filter((w) => w.tierName === tier)
+        .map((w) => ({ w, k: caseKey(w.tierName, w.model, w.inst.instance_id) }))
+        .filter(({ k }) => !done.has(k))
+        .map(({ w, k }) => ({
+          tier: w.tierName,
+          model: w.model,
+          instance_id: w.inst.instance_id,
+          status: running.has(k) ? "running" : "pending",
+          // Only a running case has a (live-updating) transcript to follow —
+          // point at the current trial's consolidated `full.jsonl`.
+          sessionLog: running.has(k)
+            ? `${trialRelFor(w.inst.instance_id, w.model, trialOf.get(k) ?? 1)}/full.jsonl`
+            : undefined,
+        }));
+      // Per-tier progress (cases), not the global trial count — each tier's
+      // scorecard stands alone, so "0/5" across both tiers was misleading.
+      const tierCases = work.filter((w) => w.tierName === tier).length;
+      writeScorecard(
+        resultsDirFor(tier),
+        withMeta(summarize(tierResults), {
+          ...baseMetaFor(tier),
+          generatedAt: now,
+          live: true,
+          progress: `${tierResults.length}/${tierCases}`,
+          pending,
+        }),
+      );
+    }
   };
 
   // Run one case `runs` times and fold the trials into a single result
   // (worst-case verdict, mean metrics). `onTrial` ticks per model call.
   const runItem = async (w: WorkItem, onTrial: () => void): Promise<InstanceResult> => {
+    const k = caseKey(w.tierName, w.model, w.inst.instance_id);
     const trials: InstanceResult[] = [];
-    for (let t = 0; t < runs; t++) {
+    for (let t = 1; t <= runs; t++) {
+      trialOf.set(k, t); // so the live "follow" link targets this trial
+      const trialRel = trialRelFor(w.inst.instance_id, w.model, t);
       const r = await runInstance(w.inst, {
         model: w.model,
         datasetDir: w.datasetDir,
         defaultWorkflow: w.defaultWorkflow,
         manageEnv: false,
+        // Per-trial dir: `full.jsonl` (consolidated, live) + `NN-<phase>.jsonl`.
+        sessionTrialDir: join(resultsDirFor(w.tierName), trialRel),
+        sessionTrialRel: trialRel,
+        trial: t,
       });
       r.tier = w.tierName;
       trials.push(r);
       completed++;
       onTrial();
     }
-    return aggregateTrials(trials);
+    const agg = aggregateTrials(trials);
+    // Keep every trial's per-phase sessions on the aggregate (aggregateTrials
+    // only carries trial 0's fields through).
+    agg.sessions = trials.map((r) => r.sessionTrial).filter((s): s is TrialSession => !!s);
+    return agg;
   };
 
   // Install the eval's static-token env ONCE for the whole batch so concurrent
@@ -558,17 +602,21 @@ async function runEval(): Promise<number> {
   // persisted into scorecard.json so the dashboard can label, order, and (no
   // longer) live-poll the run without re-deriving from the current config.
   const generatedAt = new Date().toISOString();
-  const card = withMeta(summarize(all), { ...baseMeta, generatedAt, live: false });
-  writeArtifacts(resultsDir, card);
+  for (const tier of tiers) {
+    const tierResults = all.filter((r) => (r.tier ?? "") === tier);
+    writeArtifacts(resultsDirFor(tier), withMeta(summarize(tierResults), { ...baseMetaFor(tier), generatedAt, live: false }));
+  }
 
-  p.log.success(`Artifacts → ${chalk.cyan(resultsDir)}/{scorecard.json,predictions.jsonl}`);
+  p.log.success(
+    `Artifacts → ${chalk.cyan(tiers.map((t) => resultsDirFor(t)).join("\n             "))}\n             /{scorecard.json,predictions.jsonl,sessions/}`,
+  );
 
   const ran = runs > 1 ? `${completed} runs (${all.length} cases × ${runs})` : `${all.length} runs`;
 
   // Keep the dashboard server alive so the just-finished run stays viewable.
   // Only block in an interactive terminal — piped/non-TTY callers exit cleanly.
   if (server && process.stdout.isTTY) {
-    const runUrl = `${server.url}/#/${encodeURIComponent(tiersKey)}/${encodeURIComponent(runId)}`;
+    const runUrl = `${server.url}/#/${encodeURIComponent(tierKeyFor(tiers[0]))}/${encodeURIComponent(runId)}`;
     p.log.success(`Dashboard → ${chalk.cyan(runUrl)} ${chalk.dim("(serving · Ctrl-C to stop)")}`);
     const tail = harnessErrors > 0 ? chalk.yellow(`done — ${ran}, ${harnessErrors} harness error${harnessErrors === 1 ? "" : "s"} (see above)`) : chalk.green(`done — ${ran}`);
     p.outro(tail);

@@ -1,7 +1,7 @@
 import type { IndexRun, IndexTier, ModelSummary } from "../types";
 import { fmtDate, modelLabel, tierMetric } from "../lib/format";
 import { useNavigate } from "../lib/router";
-import { Sparkline } from "./ui";
+import { LiveBadge, Sparkline } from "./ui";
 
 const tierModels = (run: IndexRun, tier: string): ModelSummary[] =>
   run.byTier.find((b) => b.tier === tier)?.models ?? [];
@@ -14,8 +14,13 @@ export function Overview({ tier }: { tier: IndexTier }) {
   for (const r of runs) Object.assign(labels, r.labels);
 
   // Actual tiers measured across these runs (first-seen, newest run first).
+  // Include each run's declared tiers too, so a still-live run with no finished
+  // cases yet (empty byTier) still renders its section instead of a blank page.
   const tiers: string[] = [];
-  for (const r of runs) for (const b of r.byTier) if (!tiers.includes(b.tier)) tiers.push(b.tier);
+  for (const r of runs) {
+    for (const b of r.byTier) if (!tiers.includes(b.tier)) tiers.push(b.tier);
+    for (const t of r.tiers) if (!tiers.includes(t)) tiers.push(t);
+  }
 
   if (!runs.length) {
     return <p className="py-10 font-mono text-sm text-base-content/50">No runs yet for {tier.key}.</p>;
@@ -45,10 +50,10 @@ function TierSection({
   const metric = tierMetric(tier);
   const chrono = [...runs].reverse(); // oldest → newest for sparklines
 
-  // Model set across all runs (first-seen over chrono).
+  // Model set across all runs (first-seen over chrono). May be empty while a
+  // run is still live (no finished cases yet) — we still list the runs below.
   const models: string[] = [];
   for (const r of chrono) for (const m of tierModels(r, tier)) if (!models.includes(m.model)) models.push(m.model);
-  if (!models.length) return null;
 
   const summariesFor = (r: IndexRun) => new Map(tierModels(r, tier).map((m) => [m.model, m]));
 
@@ -61,39 +66,41 @@ function TierSection({
         </span>
       </h2>
 
-      <div className="overflow-hidden rounded-xl border border-base-300 bg-base-200">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-neutral text-2xs uppercase tracking-wide text-base-content/50">
-              <th className="px-3 py-3 text-left font-semibold">model</th>
-              <th className="px-3 py-3 text-left font-semibold">trend (oldest → newest)</th>
-              <th className="px-3 py-3 text-right font-semibold">latest</th>
-            </tr>
-          </thead>
-          <tbody>
-            {models.map((model) => {
-              const rates = chrono
-                .map((r) => summariesFor(r).get(model))
-                .filter((m): m is ModelSummary => !!m)
-                .map(metric.rate);
-              const latest = rates.length ? rates[rates.length - 1] : 0;
-              return (
-                <tr key={model} className="border-t border-base-300">
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono font-semibold text-accent">
-                    {modelLabel(labels, model)}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Sparkline rates={rates} />
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-base-content">
-                    {rates.length ? `${(latest * 100).toFixed(0)}%` : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {models.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-base-300 bg-base-200">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-neutral text-2xs uppercase tracking-wide text-base-content/50">
+                <th className="px-3 py-3 text-left font-semibold">model</th>
+                <th className="px-3 py-3 text-left font-semibold">trend (oldest → newest)</th>
+                <th className="px-3 py-3 text-right font-semibold">latest</th>
+              </tr>
+            </thead>
+            <tbody>
+              {models.map((model) => {
+                const rates = chrono
+                  .map((r) => summariesFor(r).get(model))
+                  .filter((m): m is ModelSummary => !!m)
+                  .map(metric.rate);
+                const latest = rates.length ? rates[rates.length - 1] : 0;
+                return (
+                  <tr key={model} className="border-t border-base-300">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-semibold text-accent">
+                      {modelLabel(labels, model)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <Sparkline rates={rates} />
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-semibold text-base-content">
+                      {rates.length ? `${(latest * 100).toFixed(0)}%` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-base-300 bg-base-200">
         <table className="w-full border-collapse text-sm">
@@ -121,7 +128,7 @@ function TierSection({
                 >
                   <td className="px-3 py-2.5 font-mono">
                     <span className="text-info hover:underline">{fmtDate(r.generatedAt)}</span>
-                    {r.live && <span className="ll-pulse ml-2 text-2xs font-semibold text-accent">● live</span>}
+                    <LiveBadge run={r} className="ml-2" />
                   </td>
                   <td className="px-3 py-2.5 font-mono text-base-content/50">{r.gitSha ?? "—"}</td>
                   {models.map((m) => {

@@ -25,6 +25,21 @@ export interface Check {
   detail?: string;
 }
 
+/** One workflow phase's archived session (mirrors harness `schema.ts`). */
+export interface PhaseSession {
+  phase: string;
+  success?: boolean;
+  /** Relative path (under the run dir) of this phase's session jsonl. */
+  log: string;
+}
+
+/** One trial's archived session: per-phase logs + a consolidated `full`. */
+export interface TrialSession {
+  trial: number;
+  full?: string;
+  phases: PhaseSession[];
+}
+
 export interface InstanceResult {
   instance_id: string;
   model: string;
@@ -37,6 +52,9 @@ export interface InstanceResult {
   behavioralPass?: number;
   resolvedPass?: number;
   githubMutations?: number;
+  /** Archived agent sessions — one per trial, each split per workflow phase.
+   * Relative paths resolve against the run's scorecard URL. */
+  sessions?: TrialSession[];
   inputTokens: number;
   cachedTokens: number;
   outputTokens: number;
@@ -50,6 +68,8 @@ export interface PendingCase {
   model: string;
   instance_id: string;
   status: "running" | "pending";
+  /** For a running case: the live-updating session jsonl path to follow. */
+  sessionLog?: string;
 }
 
 export interface RunMeta {
@@ -88,6 +108,8 @@ export interface IndexRun {
   runs: number;
   live: boolean;
   progress?: string;
+  running?: number;
+  queued?: number;
 }
 
 export interface IndexTier {

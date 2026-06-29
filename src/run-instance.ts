@@ -15,17 +15,23 @@
  * agent loop are exactly what ships.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, existsSync, writeFileSync, renameSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { getWorkflow, runWorkflow, type ExecutorConfig, type TemplateContext } from "lastlight/evals";
+import {
+  getWorkflow,
+  runWorkflow,
+  type ExecutorConfig,
+  type TemplateContext,
+  type RunnerCallbacks,
+} from "lastlight/evals";
 
-import type { SweBenchInstance, InstanceResult } from "./schema.js";
+import type { SweBenchInstance, InstanceResult, PhaseSession } from "./schema.js";
 import { startFakeGitHub } from "./fake-github.js";
 import { seedWorkspace } from "./seed.js";
-import { collectMetrics, drainSessions } from "./metrics.js";
+import { collectMetrics, drainSessions, readSessionLog, listSessionFiles, concatJsonl } from "./metrics.js";
 import { gradeBehavioral, gradeExecution, gradeTriage } from "./grade.js";
 
 export interface RunInstanceOptions {
@@ -37,6 +43,19 @@ export interface RunInstanceOptions {
   /** Default workflow when the instance doesn't name one. */
   defaultWorkflow?: string;
   keepWorkspace?: boolean;
+  /**
+   * Absolute dir for THIS trial's archived session logs (e.g.
+   * `<runDir>/sessions/<id>__<model>/trial-1`). When set, the consolidated
+   * transcript is flushed here live as `full.jsonl` (so a running case can be
+   * followed) and, at the end, split into one `NN-<phase>.jsonl` per workflow
+   * phase. Omit to keep the prior throwaway behaviour.
+   */
+  sessionTrialDir?: string;
+  /** {@link sessionTrialDir} as a path RELATIVE to the run dir (what the
+   * dashboard resolves against the scorecard URL). */
+  sessionTrialRel?: string;
+  /** 1-based trial index recorded on the result's {@link TrialSession}. */
+  trial?: number;
   /**
    * When `false`, this call does NOT touch `process.env` — the caller has
    * already installed the eval's static-token env around the whole batch (see
@@ -154,8 +173,44 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
       webSearch: false,
     };
 
-    // 4. Run. Empty approvalConfig → every approval gate is disabled.
-    const wf = await runWorkflow(def, ctx, config, {}, undefined, undefined, {});
+    // Phase windows: each phase writes its own session jsonl(s), but the public
+    // runner doesn't expose the sessionId→phase map. Phases run sequentially, so
+    // `onPhaseStart` timestamps let us bucket each session file into the last
+    // phase started before it (see the split in 5d).
+    const phaseStarts: { phase: string; start: number }[] = [];
+    const callbacks: RunnerCallbacks = {
+      onPhaseStart: async (phase) => {
+        phaseStarts.push({ phase, start: Date.now() });
+      },
+    };
+
+    const trialDir = opts.sessionTrialDir;
+    const fullFile = trialDir ? join(trialDir, "full.jsonl") : undefined;
+    // Flush the consolidated transcript atomically (so a polling dashboard never
+    // reads a half-written file): on a timer while running (follow-along), and
+    // once at the end. Best-effort — a flush failure must never affect the run.
+    const flushFull = () => {
+      if (!fullFile || !trialDir) return;
+      try {
+        const log = readSessionLog(sessionsDir);
+        if (!log) return;
+        mkdirSync(trialDir, { recursive: true });
+        const tmp = `${fullFile}.tmp`;
+        writeFileSync(tmp, log);
+        renameSync(tmp, fullFile);
+      } catch {
+        /* best-effort */
+      }
+    };
+
+    // 4. Run. Empty approvalConfig (7th arg) → every approval gate is disabled.
+    const flushTimer = fullFile ? setInterval(flushFull, 1000) : undefined;
+    let wf;
+    try {
+      wf = await runWorkflow(def, ctx, config, callbacks, undefined, undefined, {});
+    } finally {
+      if (flushTimer) clearInterval(flushTimer);
+    }
 
     result.workflowSucceeded = wf.success;
     result.phases = wf.phases.map((p) => ({ phase: p.phase, success: p.success }));
@@ -204,6 +259,54 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
     result.outputTokens = m.outputTokens;
     result.costUsd = m.costUsd;
     result.githubMutations = fake.calls.length;
+
+    // 5d. Archive the session (the drain above ensured the last `result`
+    // envelope landed): a final consolidated `full.jsonl` plus one
+    // `NN-<phase>.jsonl` per workflow phase — bucketing each session file into
+    // the phase whose start-time window it falls in. Done before the temp
+    // workspace is deleted below. Best-effort: a failure leaves sessionTrial unset.
+    if (trialDir) {
+      try {
+        flushFull();
+        const rel = opts.sessionTrialRel ?? trialDir;
+        const successByPhase = new Map(wf.phases.map((p) => [p.phase, p.success]));
+        const starts = [...phaseStarts].sort((a, b) => a.start - b.start);
+        const files = listSessionFiles(sessionsDir); // chronological
+        const buckets = new Map<string, string[]>();
+        const order: string[] = [];
+        for (const sf of files) {
+          // The last phase started at/before this session's first line (50ms slack).
+          let phase = starts[0]?.phase ?? "session";
+          for (const ev of starts) {
+            if (ev.start <= sf.firstTs + 50) phase = ev.phase;
+            else break;
+          }
+          if (!buckets.has(phase)) {
+            buckets.set(phase, []);
+            order.push(phase);
+          }
+          buckets.get(phase)!.push(sf.file);
+        }
+        const phases: PhaseSession[] = [];
+        let idx = 0;
+        for (const phase of order) {
+          const content = concatJsonl(buckets.get(phase)!);
+          if (!content) continue; // skip no-agent phases (e.g. phase_0)
+          idx++;
+          const fileName = `${String(idx).padStart(2, "0")}-${slug(phase)}.jsonl`;
+          mkdirSync(trialDir, { recursive: true });
+          writeFileSync(join(trialDir, fileName), content);
+          phases.push({ phase, success: successByPhase.get(phase), log: `${rel}/${fileName}` });
+        }
+        result.sessionTrial = {
+          trial: opts.trial ?? 1,
+          full: fullFile ? `${rel}/full.jsonl` : undefined,
+          phases,
+        };
+      } catch {
+        /* leave sessionTrial unset */
+      }
+    }
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err);
   } finally {
@@ -218,7 +321,7 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
   return result;
 }
 
-function slug(s: string): string {
+export function slug(s: string): string {
   return s.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40);
 }
 

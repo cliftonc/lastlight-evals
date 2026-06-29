@@ -20,6 +20,9 @@ export interface PendingCase {
   model: string;
   instance_id: string;
   status: "running" | "pending";
+  /** For a running case: the archived session jsonl path (live-updated during
+   * the run), so the dashboard can open + follow the transcript as it streams. */
+  sessionLog?: string;
 }
 
 /**
@@ -235,6 +238,10 @@ export interface IndexRun {
   live: boolean;
   /** Progress text for the live badge (e.g. "7/30"). */
   progress?: string;
+  /** Live-run case counts (so the overview can show "running" vs "queued"
+   * instead of a bare "live" for a tier whose cases haven't started). */
+  running?: number;
+  queued?: number;
 }
 
 /** One tier-combo directory (`eval-results/<key>`) and its runs, newest first. */
@@ -286,6 +293,8 @@ function indexRun(tierKey: string, dir: string, card: Scorecard): IndexRun {
     runs: meta?.runs ?? 1,
     live: !!meta?.live,
     progress: meta?.progress,
+    running: (meta?.pending ?? []).filter((p) => p.status === "running").length,
+    queued: (meta?.pending ?? []).filter((p) => p.status === "pending").length,
   };
 }
 

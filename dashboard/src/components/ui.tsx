@@ -88,3 +88,32 @@ export function Sparkline({ rates }: { rates: number[] }) {
     </svg>
   );
 }
+
+/** Live-run status badge. Three distinct states (a tier can be live but already
+ * finished while the overall run continues elsewhere):
+ *   - running → green, pulsing, with progress
+ *   - queued  → amber, hollow, static
+ *   - done (live but no running/queued cases) → nothing (renders as finished). */
+export function LiveBadge({
+  run,
+  className = "",
+  size = "xs",
+}: {
+  run: { live?: boolean; running?: number; queued?: number; progress?: string };
+  className?: string;
+  size?: "xs" | "sm";
+}) {
+  if (!run.live) return null;
+  const sz = size === "sm" ? "text-sm" : "text-2xs";
+  if (run.running && run.running > 0) {
+    return (
+      <span className={`ll-pulse whitespace-nowrap font-semibold text-success ${sz} ${className}`}>
+        ● running{run.progress ? ` ${run.progress}` : ""}
+      </span>
+    );
+  }
+  if (run.queued && run.queued > 0) {
+    return <span className={`whitespace-nowrap font-semibold text-warning ${sz} ${className}`}>○ queued</span>;
+  }
+  return null;
+}
