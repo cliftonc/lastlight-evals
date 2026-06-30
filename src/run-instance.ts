@@ -29,7 +29,7 @@ import {
 } from "lastlight/evals";
 
 import type { SweBenchInstance, InstanceResult, PhaseSession } from "./schema.js";
-import { resolvePhaseModel, type ModelConfig, type VariantConfig } from "./config.js";
+import type { Arm } from "./arm.js";
 import { startFakeGitHub } from "./fake-github.js";
 import { seedWorkspace } from "./seed.js";
 import { collectMetrics, drainSessions, readSessionLog, listSessionFiles, concatJsonl } from "./metrics.js";
@@ -37,24 +37,14 @@ import { gradeBehavioral, gradeExecution, gradeTriage } from "./grade.js";
 
 export interface RunInstanceOptions {
   /**
-   * The arm's axis LABEL recorded on the result (a model id in `models` runs,
-   * the config/overlay name in `config` runs). In `models` runs it's also the
-   * model forced across every step; in `config` runs the per-step models come
-   * from {@link modelConfig} instead and `model` is just the label.
+   * The comparison arm — the ONE thing that varies model selection across a
+   * run. `arm.label` is recorded on the result; `arm.prepare(ctx)` supplies the
+   * executor model + per-phase `models`/`variants` (forced model for `models`
+   * arms, the merged per-step config for `config` arms); `arm.recordPhaseModel`
+   * reports what each phase resolved to. The two run-type branches that used to
+   * live here are now polymorphism behind this interface (see {@link Arm}).
    */
-  model: string;
-  /**
-   * `config` run type: the merged per-step model map (default.yaml + overlay
-   * config.yaml). When set, this is threaded to core EXACTLY as production does
-   * — onto `ctx.models` (so `{{models.X}}` phase templates resolve) AND as the
-   * `runWorkflow` `models` arg (the resolver fallback) — so core picks the
-   * model per phase. `ExecutorConfig.model` falls back to `modelConfig.default`.
-   * Omit for `models` runs (one model forced across all steps).
-   */
-  modelConfig?: ModelConfig;
-  /** `config` run type: the merged per-step reasoning-effort map, threaded
-   * alongside {@link modelConfig} (prod parity). */
-  variantConfig?: VariantConfig;
+  arm: Arm;
   /** Base dir for the run's sandbox/sessions (a fresh temp dir if omitted). */
   stateDir?: string;
   /** Dataset dir holding `repos/<id>` (fixture) + `tests/<id>` (held-out). */
@@ -144,7 +134,7 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
 
   const result: InstanceResult = {
     instance_id: inst.instance_id,
-    model: opts.model,
+    model: opts.arm.label,
     workflowSucceeded: false,
     inputTokens: 0,
     cachedTokens: 0,
@@ -182,24 +172,21 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
       // works in the dir we seeded above (or an empty dir for triage).
     };
 
-    // `config` run type: thread the merged per-step model/variant maps onto the
-    // context EXACTLY as production (`simple.js`) does, so phase `model:
-    // "{{models.X}}"` templates resolve against `ctx.models`. (TemplateContext
-    // doesn't declare these — prod sets them as extra top-level keys too.)
-    if (opts.modelConfig) {
-      (ctx as Record<string, unknown>).models = opts.modelConfig;
-      (ctx as Record<string, unknown>).variants = opts.variantConfig ?? {};
-    }
+    // The arm supplies model selection in one shot: it patches `ctx.models`/
+    // `ctx.variants` (config arms — EXACTLY as production's `simple.js`, so phase
+    // `model: "{{models.X}}"` templates resolve) and returns the executor model
+    // plus the `runWorkflow` `models`/`variants` args. `models` arms leave the
+    // context untouched and return just their forced id.
+    const prepared = opts.arm.prepare(ctx as Record<string, unknown>);
 
     const config: ExecutorConfig = {
       sandbox: "none",
       stateDir,
       sessionsDir,
-      // `config` mode lets core pick per phase; `config.model` is only the
-      // fallback for phases that resolve to nothing, so use the config default
-      // (NOT opts.model, which is the arm label in config mode). `models` mode
-      // forces opts.model across every step.
-      model: opts.modelConfig ? opts.modelConfig.default : opts.model,
+      // `config` arms let core pick per phase (this is only the fallback for
+      // phases that resolve to nothing — the merged config's `default`); `models`
+      // arms force their one id across every step.
+      model: prepared.model,
       githubApiBaseUrl: fake.url,
       // Eval workflows shouldn't reach the network beyond the model + fake GH.
       webSearch: false,
@@ -236,9 +223,9 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
     };
 
     // 4. Run. Empty approvalConfig (7th arg) → every approval gate is disabled.
-    // In `config` mode the merged maps go to args 6 (models) and 9 (variants),
-    // matching prod's runWorkflow call; in `models` mode both stay undefined so
-    // every phase falls back to config.model (one model everywhere).
+    // The arm's prepared maps go to args 6 (models) and 9 (variants), matching
+    // prod's runWorkflow call; `models` arms leave both undefined so every phase
+    // falls back to config.model (one model everywhere).
     const flushTimer = fullFile ? setInterval(flushFull, 1000) : undefined;
     let wf;
     try {
@@ -248,26 +235,24 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
         config,
         callbacks,
         undefined,
-        opts.modelConfig,
+        prepared.models,
         {},
         undefined,
-        opts.variantConfig,
+        prepared.variants,
       );
     } finally {
       if (flushTimer) clearInterval(flushTimer);
     }
 
     result.workflowSucceeded = wf.success;
-    // Record the model each phase resolved to — the run's forced model in
-    // `models` mode, or the per-step model the merged config assigned in
-    // `config` mode (mirrors core's selection for display; see config.ts).
+    // Record the model each phase resolved to — the arm forced id in `models`
+    // mode, or the per-step model the merged config assigned in `config` mode
+    // (mirrors core's selection for display; see config.ts).
     const phaseModelTemplates = new Map(def.phases.map((p) => [p.name, p.model]));
     result.phases = wf.phases.map((p) => ({
       phase: p.phase,
       success: p.success,
-      model: opts.modelConfig
-        ? resolvePhaseModel(phaseModelTemplates.get(p.phase), p.phase, opts.modelConfig)
-        : opts.model,
+      model: opts.arm.recordPhaseModel(phaseModelTemplates.get(p.phase), p.phase),
     }));
 
     // A workflow can end un-successful for two very different reasons:

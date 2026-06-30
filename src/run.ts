@@ -19,7 +19,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 
 import * as p from "@clack/prompts";
@@ -27,7 +27,7 @@ import chalk from "chalk";
 
 import { loadDotEnv, hasProviderKey, evalModels, compareModels, modelLabels, resolveModel, setModelsPath } from "./env.js";
 import { runInstance, applyEvalEnv, slug } from "./run-instance.js";
-import { loadMergedConfig, type ModelConfig, type VariantConfig } from "./config.js";
+import { modelsArm, configArm, releaseOverlayGuard, type Arm } from "./arm.js";
 import {
   summarize,
   writeArtifacts,
@@ -354,36 +354,24 @@ async function runEval(): Promise<number> {
     if (!discovered.has(t)) p.log.warn(`Unknown tier "${t}". Known: ${known.join(", ")}`);
   }
 
-  // An "arm" is one column of the comparison. `models` runs have one arm per
-  // model (forced across every step); `config` runs have one arm per overlay
-  // (its merged per-step config drives selection). Both flow through the same
-  // work-list → scorecard → dashboard, keyed on the arm's `label`.
-  interface Arm {
-    /** Axis label (model id in `models` runs; overlay/config name in `config`). */
-    label: string;
-    /** Parallel-grouping key: provider env-key in `models`; arm id in `config`. */
-    family: string;
-    /** `config` runs: the merged per-step model/variant maps + which overlay's
-     * assets to bootstrap. Absent in `models` runs (one forced model = label). */
-    modelConfig?: ModelConfig;
-    variantConfig?: VariantConfig;
-    overlayDir?: string;
-  }
-
-  // The model-selection sub-mode (only meaningful for `models` runs); shown in
-  // the plan note. `config` runs report their arm count instead.
+  // An "arm" is one column of the comparison, behind the `Arm` seam (src/arm.ts):
+  // `models` runs build one `modelsArm` per model (forced across every step);
+  // `config` runs build one `configArm` per overlay (its merged per-step config
+  // drives selection). Both flow through the same work-list → scorecard →
+  // dashboard, keyed on the arm's `label`. run.ts owns *which* arms exist (the
+  // flag + registry resolution below); the adapters own *how* to build one.
+  //
+  // The model-selection sub-mode (only meaningful for `models` runs) is shown in
+  // the plan note; `config` runs report their arm count instead.
   const mode = runType === "config" ? "config" : modelArg ? "select" : compare ? "compare" : "single";
   let arms: Arm[];
   if (runType === "config") {
     // One arm per overlay (or a single core-defaults arm when none). `--model`
-    // overrides each merged config's `default` key for quick what-if runs.
+    // resolves to an id that overrides each merged config's `default` for quick
+    // what-if runs (the override is applied inside configArm).
     const configOverlays = overlays.length ? overlays : [overlayDir];
-    arms = configOverlays.map((dir) => {
-      const merged = loadMergedConfig(builtInRoot, dir);
-      if (modelArg) merged.models.default = resolveModel(modelArg).id;
-      const label = dir ? basename(dir) : "config";
-      return { label, family: label, modelConfig: merged.models, variantConfig: merged.variants, overlayDir: dir };
-    });
+    const defaultOverride = modelArg ? resolveModel(modelArg).id : undefined;
+    arms = configOverlays.map((dir) => configArm(builtInRoot, dir, defaultOverride));
   } else {
     // Model selection precedence:
     //   1. --model / --models (or EVAL_MODEL[S]) — an explicit list, fuzzy-matched.
@@ -401,7 +389,7 @@ async function runEval(): Promise<number> {
       : compare
         ? compareModels().map((m) => ({ id: m.id, family: m.envKey ?? m.provider ?? "default" }))
         : evalModels().map((id) => ({ id, family: "default" }));
-    arms = entries.map((e) => ({ label: e.id, family: e.family }));
+    arms = entries.map((e) => modelsArm(e.id, e.family));
   }
   if (!arms.length) {
     p.log.error(
@@ -417,14 +405,10 @@ async function runEval(): Promise<number> {
     tierName: string;
     defaultWorkflow: string;
     datasetDir: string;
-    /** The arm's axis label (= {@link Arm.label}); recorded as InstanceResult.model. */
-    model: string;
-    family: string;
-    /** `config` arms only: threaded to runInstance to drive per-step selection. */
-    modelConfig?: ModelConfig;
-    variantConfig?: VariantConfig;
-    /** `config` arms only: which overlay's assets to bootstrap before this arm. */
-    overlayDir?: string;
+    /** The comparison arm — carries the axis label (`arm.label`, recorded as
+     * InstanceResult.model), the family grouping, and all model selection.
+     * Arm data is typed ONCE here, not re-flattened onto the work item. */
+    arm: Arm;
     inst: SweBenchInstance;
   }
 
@@ -455,11 +439,7 @@ async function runEval(): Promise<number> {
           tierName,
           defaultWorkflow: workflowFor(tier, inst),
           datasetDir: tier.root,
-          model: arm.label,
-          family: arm.family,
-          modelConfig: arm.modelConfig,
-          variantConfig: arm.variantConfig,
-          overlayDir: arm.overlayDir,
+          arm,
           inst,
         });
       }
@@ -477,9 +457,9 @@ async function runEval(): Promise<number> {
   // serial with --serial or when there's only one family.
   const byFamily = new Map<string, WorkItem[]>();
   for (const w of work) {
-    const arr = byFamily.get(w.family);
+    const arr = byFamily.get(w.arm.family);
     if (arr) arr.push(w);
-    else byFamily.set(w.family, [w]);
+    else byFamily.set(w.arm.family, [w]);
   }
   // `config` runs stay SERIAL: arms may carry distinct overlays and the asset
   // root is a process global, so the serial loop re-bootstraps per arm (below).
@@ -527,14 +507,11 @@ async function runEval(): Promise<number> {
     runType === "config"
       ? `${chalk.bold("configs")} ${armLabels.join(", ")}`
       : `${chalk.bold("models")}  ${armLabels.join(", ")}`;
-  const phaseMapLine =
-    runType === "config" && arms.length === 1 && arms[0].modelConfig
-      ? `\n${chalk.bold("models")}  ${chalk.dim(
-          Object.entries(arms[0].modelConfig)
-            .map(([k, v]) => `${k}→${v}`)
-            .join("  "),
-        )}`
-      : "";
+  // For a single-arm run, show the per-step model map (config arms) so the plan
+  // is legible. `describe()` returns the summary for config arms, undefined for
+  // models arms — the reach into the arm's config map stays behind the seam.
+  const armSummary = arms.length === 1 ? arms[0].describe() : undefined;
+  const phaseMapLine = armSummary ? `\n${chalk.bold("models")}  ${chalk.dim(armSummary)}` : "";
   p.note(
     `${chalk.bold("mode")}    ${mode}${
       parallel ? chalk.dim(` (parallel · ${byFamily.size} families)`) : ""
@@ -594,17 +571,17 @@ async function runEval(): Promise<number> {
       const tierResults = all.filter((r) => (r.tier ?? "") === tier);
       const pending: PendingCase[] = work
         .filter((w) => w.tierName === tier)
-        .map((w) => ({ w, k: caseKey(w.tierName, w.model, w.inst.instance_id) }))
+        .map((w) => ({ w, k: caseKey(w.tierName, w.arm.label, w.inst.instance_id) }))
         .filter(({ k }) => !done.has(k))
         .map(({ w, k }) => ({
           tier: w.tierName,
-          model: w.model,
+          model: w.arm.label,
           instance_id: w.inst.instance_id,
           status: running.has(k) ? "running" : "pending",
           // Only a running case has a (live-updating) transcript to follow —
           // point at the current trial's consolidated `full.jsonl`.
           sessionLog: running.has(k)
-            ? `${trialRelFor(w.inst.instance_id, w.model, trialOf.get(k) ?? 1)}/full.jsonl`
+            ? `${trialRelFor(w.inst.instance_id, w.arm.label, trialOf.get(k) ?? 1)}/full.jsonl`
             : undefined,
         }));
       // Per-tier progress (cases), not the global trial count — each tier's
@@ -626,17 +603,15 @@ async function runEval(): Promise<number> {
   // Run one case `runs` times and fold the trials into a single result
   // (worst-case verdict, mean metrics). `onTrial` ticks per model call.
   const runItem = async (w: WorkItem, onTrial: () => void): Promise<InstanceResult> => {
-    const k = caseKey(w.tierName, w.model, w.inst.instance_id);
+    const k = caseKey(w.tierName, w.arm.label, w.inst.instance_id);
     const trials: InstanceResult[] = [];
     for (let t = 1; t <= runs; t++) {
       trialOf.set(k, t); // so the live "follow" link targets this trial
-      const trialRel = trialRelFor(w.inst.instance_id, w.model, t);
+      const trialRel = trialRelFor(w.inst.instance_id, w.arm.label, t);
       const r = await runInstance(w.inst, {
-        model: w.model,
-        // `config` arms carry the merged per-step maps; `models` arms leave
-        // these undefined so the workflow forces `w.model` on every step.
-        modelConfig: w.modelConfig,
-        variantConfig: w.variantConfig,
+        // The arm carries all model selection (forced model / merged config) +
+        // the axis label; runInstance calls its prepare()/recordPhaseModel().
+        arm: w.arm,
         datasetDir: w.datasetDir,
         defaultWorkflow: w.defaultWorkflow,
         manageEnv: false,
@@ -680,7 +655,7 @@ async function runEval(): Promise<number> {
         await Promise.all(
           [...byFamily].map(async ([f, items]) => {
             for (const w of items) {
-              const k = caseKey(w.tierName, w.model, w.inst.instance_id);
+              const k = caseKey(w.tierName, w.arm.label, w.inst.instance_id);
               running.add(k);
               refresh();
               const result = await runItem(w, () => {
@@ -703,21 +678,25 @@ async function runEval(): Promise<number> {
       s.stop(`${chalk.dim(`${completed}/${total}`)} ${chalk.green("done")}`);
       p.log.message(verdicts.join("\n"));
     } else {
-      // Serial: one spinner per case (updates per trial) + a verdict line.
-      // `config` runs repoint the (process-global) asset root when the arm's
-      // overlay changes — work is arms-outer, so this fires at most once per arm.
-      let currentOverlay: string | undefined = overlayDir;
+      // Serial: one spinner per case (updates per trial) + a verdict line. On
+      // each arm change `arm.activate()` repoints the (process-global) asset root
+      // to that arm's overlay (a no-op for models arms); work is arms-outer, so
+      // it fires at most once per arm. `releaseOverlayGuard()` lets the next arm
+      // switch overlays — without it the guard treats the switch as a concurrent
+      // overlay and throws (ADR 0001).
+      let currentArm: Arm | undefined;
       for (let i = 0; i < work.length; i++) {
         const w = work[i];
-        if (runType === "config" && w.overlayDir !== currentOverlay) {
-          bootstrapAssets({ overlayDir: w.overlayDir });
-          currentOverlay = w.overlayDir;
+        if (w.arm !== currentArm) {
+          if (currentArm) releaseOverlayGuard();
+          w.arm.activate();
+          currentArm = w.arm;
         }
         const s = makeSpinner();
-        const head = `${chalk.dim(`[${i + 1}/${work.length}]`)} ${chalk.cyan(w.tierName)}/${w.inst.instance_id}  ${chalk.dim(labels[w.model] ?? w.model)}`;
+        const head = `${chalk.dim(`[${i + 1}/${work.length}]`)} ${chalk.cyan(w.tierName)}/${w.inst.instance_id}  ${chalk.dim(labels[w.arm.label] ?? w.arm.label)}`;
         s.start(head);
 
-        const k = caseKey(w.tierName, w.model, w.inst.instance_id);
+        const k = caseKey(w.tierName, w.arm.label, w.inst.instance_id);
         running.add(k);
         refresh();
         let t = 0;

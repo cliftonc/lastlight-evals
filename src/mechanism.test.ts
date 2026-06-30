@@ -18,6 +18,7 @@ import { startFakeGitHub } from "./fake-github.js";
 import { seedWorkspace } from "./seed.js";
 import { gradeExecution, gradeBehavioral, gradeTriage } from "./grade.js";
 import { loadMergedConfig, resolvePhaseModel } from "./config.js";
+import { modelsArm, configArm, releaseOverlayGuard } from "./arm.js";
 
 const staticAuth = { getToken: async () => "fake-token", expiresAt: null };
 
@@ -118,6 +119,131 @@ describe("config run type — per-step model resolution (config.ts)", () => {
     expect(resolvePhaseModel(undefined, "executor", models)).toBe("m-default");
     // 5. Template referencing an unset key → falls through to phase/default.
     expect(resolvePhaseModel("{{models.missing}}", "executor", models)).toBe("m-default");
+  });
+});
+
+describe("Arm seam — model-selection adapters (arm.ts)", () => {
+  // A stand-in core root (just the one file loadMergedConfig reads) + an overlay
+  // that retargets some phases — mirrors the config.ts test fixtures.
+  function makeRoots(): { root: string; overlay: string } {
+    const root = mkdtempSync(join(tmpdir(), "ll-eval-arm-"));
+    mkdirSync(join(root, "config"), { recursive: true });
+    writeFileSync(
+      join(root, "config", "default.yaml"),
+      "models:\n  default: anthropic/claude-sonnet-4-6\nvariants: {}\n",
+    );
+    const overlay = join(root, "overlay");
+    mkdirSync(overlay, { recursive: true });
+    writeFileSync(
+      join(overlay, "config.yaml"),
+      "models:\n  default: openai/gpt-5.4-mini\n  architect: openai/gpt-5.5\nvariants:\n  guardrails: low\n",
+    );
+    return { root, overlay };
+  }
+
+  describe("modelsArm — one model forced across every step", () => {
+    it("prepare() returns just the forced id and leaves ctx untouched", () => {
+      const arm = modelsArm("openai/gpt-5.5", "OPENAI_API_KEY");
+      expect(arm.label).toBe("openai/gpt-5.5");
+      expect(arm.family).toBe("OPENAI_API_KEY");
+      const ctx: Record<string, unknown> = {};
+      const prepared = arm.prepare(ctx);
+      // No per-step maps → core falls every phase back to config.model = the id.
+      expect(prepared).toEqual({ model: "openai/gpt-5.5" });
+      expect(prepared.models).toBeUndefined();
+      expect(prepared.variants).toBeUndefined();
+      expect(ctx.models).toBeUndefined();
+      expect(ctx.variants).toBeUndefined();
+    });
+
+    it("recordPhaseModel() always reports the forced id; describe() is undefined", () => {
+      const arm = modelsArm("openai/gpt-5.5", "OPENAI_API_KEY");
+      // Even a phase naming a different model template runs the one forced id.
+      expect(arm.recordPhaseModel("{{models.architect}}", "architect")).toBe("openai/gpt-5.5");
+      expect(arm.recordPhaseModel(undefined, "executor")).toBe("openai/gpt-5.5");
+      expect(arm.describe()).toBeUndefined();
+    });
+
+    it("activate() is a no-op (no overlay to switch)", () => {
+      expect(() => modelsArm("m", "f").activate()).not.toThrow();
+    });
+  });
+
+  describe("configArm — a deployment's per-step config drives selection", () => {
+    it("prepare() patches ctx.models/variants and returns the merged maps + default", () => {
+      const { root, overlay } = makeRoots();
+      try {
+        const arm = configArm(root, overlay);
+        expect(arm.label).toBe("overlay"); // basename(overlayDir)
+        expect(arm.family).toBe("overlay"); // config arms are their own family
+        const ctx: Record<string, unknown> = {};
+        const prepared = arm.prepare(ctx);
+        // The executor model is the merged default (the resolve fallback).
+        expect(prepared.model).toBe("openai/gpt-5.4-mini");
+        expect(prepared.models?.architect).toBe("openai/gpt-5.5");
+        expect(prepared.variants?.guardrails).toBe("low");
+        // Threaded onto ctx EXACTLY as prod, so `{{models.X}}` templates resolve.
+        expect(ctx.models).toBe(prepared.models);
+        expect(ctx.variants).toBe(prepared.variants);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it("--model override replaces the merged default; no overlay ⇒ label 'config' + core defaults", () => {
+      const { root, overlay } = makeRoots();
+      try {
+        const arm = configArm(root, overlay, "fireworks/some-model");
+        expect(arm.prepare({}).model).toBe("fireworks/some-model");
+
+        const core = configArm(root, undefined);
+        expect(core.label).toBe("config");
+        expect(core.prepare({}).model).toBe("anthropic/claude-sonnet-4-6");
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it("recordPhaseModel() mirrors core precedence (template → phase → default); describe() summarises", () => {
+      const { root, overlay } = makeRoots();
+      try {
+        const arm = configArm(root, overlay);
+        // A phase naming `{{models.architect}}` → the overlay's gpt-5.5.
+        expect(arm.recordPhaseModel("{{models.architect}}", "architect")).toBe("openai/gpt-5.5");
+        // An unmapped phase with no template → the merged default.
+        expect(arm.recordPhaseModel(undefined, "executor")).toBe("openai/gpt-5.4-mini");
+        const desc = arm.describe();
+        expect(desc).toContain("default→openai/gpt-5.4-mini");
+        expect(desc).toContain("architect→openai/gpt-5.5");
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("overlay guard — the process-global asset root (ADR 0001)", () => {
+    it("throws when a second, different overlay activates while one is in use; release clears it", () => {
+      const { root, overlay } = makeRoots();
+      const overlayB = join(root, "overlay-b");
+      mkdirSync(overlayB, { recursive: true });
+      writeFileSync(join(overlayB, "config.yaml"), "models:\n  default: openai/gpt-5.5\n");
+      releaseOverlayGuard(); // clean slate regardless of test order
+      try {
+        const a = configArm(root, overlay);
+        const b = configArm(root, overlayB);
+        a.activate(); // first overlay — fine
+        // A different overlay while `a` is still in use is the parallel footgun.
+        expect(() => b.activate()).toThrow(/process-global|serially|in use/i);
+        // Re-activating the SAME overlay is idempotent, not a conflict.
+        expect(() => a.activate()).not.toThrow();
+        // A release lets the next arm take over the global.
+        releaseOverlayGuard();
+        expect(() => b.activate()).not.toThrow();
+      } finally {
+        releaseOverlayGuard();
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
   });
 });
 
