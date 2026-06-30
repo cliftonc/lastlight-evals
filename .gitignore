@@ -3,6 +3,7 @@ dist/
 dist-site/
 .wrangler/
 eval-results/
+.eval-cache/
 .env
 *.log
 .DS_Store

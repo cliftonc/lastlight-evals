@@ -2,17 +2,26 @@
  * Deterministic workspace seeding for the code-fix tier.
  *
  * Pre-populates the run's sandbox workspace (`<stateDir>/sandboxes/<taskId>`,
- * the exact dir `setupTaskWorktree` would create) with a fixture repo checked
- * out at a fixed base commit, and points its `origin` at a LOCAL bare repo —
- * so the real workflow's `git push origin HEAD` succeeds fully offline with NO
- * GitHub clone. Because the eval calls `runWorkflow` with no
- * `ctx.prePopulateBranch`, the runner never triggers its own GitHub clone and
- * the agent works directly in this seeded dir.
+ * the exact dir `setupTaskWorktree` would create) with a repo checked out at a
+ * base commit, and points its `origin` at a LOCAL bare repo — so the real
+ * workflow's `git push origin HEAD` succeeds fully offline with NO GitHub clone.
+ * Because the eval calls `runWorkflow` with no `ctx.prePopulateBranch`, the
+ * runner never triggers its own GitHub clone and the agent works directly in
+ * this seeded dir.
+ *
+ * Two provenances, same end state:
+ *   - {@link seedWorkspace}        — a vendored fixture dir (`repos/<id>/`).
+ *   - {@link seedWorkspaceFromGit} — a real repo cloned into a repo-local cache
+ *                                    and checked out at `base_commit`.
+ *
+ * The git-source clone is a HARNESS SETUP action, not the workflow cloning
+ * GitHub — it touches the network only on a cache miss; the workflow itself
+ * still operates on a pre-seeded dir with an offline `file://` origin.
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, cpSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, cpSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
 
 const FIXED = "2026-01-01T00:00:00 +0000";
 const GIT_ENV: NodeJS.ProcessEnv = {
@@ -36,6 +45,31 @@ export interface SeedResult {
   branch: string;
 }
 
+/** Where git-source repos are mirrored. Repo-local (NOT `~`), gitignored —
+ * overridable with `LASTLIGHT_EVALS_CACHE`. */
+export function resolveCacheDir(override?: string): string {
+  const root = override ?? process.env.LASTLIGHT_EVALS_CACHE ?? resolve(process.cwd(), ".eval-cache");
+  return resolve(root, "repos");
+}
+
+/** Point `workDir`'s `origin` at a fresh LOCAL bare repo and push the current
+ * HEAD as the default branch, so the workflow can `git push` fully offline. */
+function setupOfflineOrigin(workDir: string, stateDir: string, taskId: string, def: string): string {
+  const originsDir = resolve(stateDir, "origins");
+  mkdirSync(originsDir, { recursive: true });
+  const originDir = resolve(originsDir, `${taskId}.git`);
+  git(workDir, ["init", "--bare", "-q", originDir]);
+  // A git-source clone already has an `origin` (the cache) — replace it.
+  try {
+    git(workDir, ["remote", "remove", "origin"]);
+  } catch {
+    /* no existing origin (fixture path) — fine */
+  }
+  git(workDir, ["remote", "add", "origin", `file://${originDir}`]);
+  git(workDir, ["push", "-q", "origin", `HEAD:refs/heads/${def}`]);
+  return originDir;
+}
+
 export function seedWorkspace(opts: {
   stateDir: string;
   taskId: string;
@@ -56,15 +90,79 @@ export function seedWorkspace(opts: {
   git(workDir, ["commit", "-q", "-m", "base"]);
   const baseCommit = git(workDir, ["rev-parse", "HEAD"]).trim();
 
-  const originsDir = resolve(opts.stateDir, "origins");
-  mkdirSync(originsDir, { recursive: true });
-  const originDir = resolve(originsDir, `${opts.taskId}.git`);
-  git(workDir, ["init", "--bare", "-q", originDir]);
-  git(workDir, ["remote", "add", "origin", `file://${originDir}`]);
-  git(workDir, ["push", "-q", "origin", `HEAD:refs/heads/${def}`]);
+  const originDir = setupOfflineOrigin(workDir, opts.stateDir, opts.taskId, def);
 
   const branch = opts.branch ?? def;
   if (branch !== def) git(workDir, ["checkout", "-q", "-b", branch]);
 
   return { workDir, originDir, baseCommit, branch };
+}
+
+/** True if `sha` is a 40-hex non-zero commit id (a real git-source base). */
+export function isRealSha(sha: string | undefined): sha is string {
+  return !!sha && /^[0-9a-f]{40}$/i.test(sha) && !/^0+$/.test(sha);
+}
+
+/** Ensure a repo-local bare mirror of `repo` exists and contains `baseCommit`
+ * (clone on miss, fetch if the commit is absent). Returns the cache dir. Run
+ * this SERIALLY per repo before a parallel batch — concurrent clones of the same
+ * repo race. Network is touched only here, only on a miss. */
+export function ensureRepoCache(opts: { repo: string; baseCommit?: string; cacheDir?: string }): string {
+  const [owner, name] = opts.repo.split("/");
+  if (!owner || !name) throw new Error(`seedWorkspaceFromGit: repo must be "owner/name", got "${opts.repo}"`);
+  const cacheDir = resolveCacheDir(opts.cacheDir);
+  const mirror = resolve(cacheDir, `${owner}__${name}.git`);
+
+  if (!existsSync(mirror)) {
+    mkdirSync(dirname(mirror), { recursive: true });
+    git(dirname(mirror), ["clone", "--bare", "--quiet", `https://github.com/${owner}/${name}.git`, mirror]);
+  }
+  // Fetch only if the wanted commit isn't already in the mirror.
+  if (opts.baseCommit) {
+    const present = (() => {
+      try {
+        git(mirror, ["cat-file", "-e", `${opts.baseCommit}^{commit}`]);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    if (!present) git(mirror, ["fetch", "--quiet", "origin", "+refs/heads/*:refs/heads/*"]);
+  }
+  return mirror;
+}
+
+/**
+ * Seed the sandbox from a real GitHub repo at `baseCommit`, with the same offline
+ * end state as {@link seedWorkspace}: a checked-out base, a feature branch, and a
+ * local bare `origin` to push to. Uses the repo-local mirror from
+ * {@link ensureRepoCache} so per-run checkout is offline and parallel-safe.
+ */
+export function seedWorkspaceFromGit(opts: {
+  stateDir: string;
+  taskId: string;
+  repo: string;
+  baseCommit: string;
+  branch?: string;
+  defaultBranch?: string;
+  cacheDir?: string;
+}): SeedResult {
+  const def = opts.defaultBranch ?? "main";
+  const mirror = ensureRepoCache({ repo: opts.repo, baseCommit: opts.baseCommit, cacheDir: opts.cacheDir });
+
+  const sandboxBase = resolve(opts.stateDir, "sandboxes");
+  const workDir = resolve(sandboxBase, opts.taskId);
+  mkdirSync(sandboxBase, { recursive: true });
+
+  // Plain local clone (not --shared) so the sandbox owns its objects/refs and
+  // parallel runs never touch the cache's object store.
+  git(sandboxBase, ["clone", "--quiet", `file://${mirror}`, workDir]);
+  git(workDir, ["checkout", "--quiet", "--detach", opts.baseCommit]);
+
+  const originDir = setupOfflineOrigin(workDir, opts.stateDir, opts.taskId, def);
+
+  const branch = opts.branch ?? def;
+  if (branch !== def) git(workDir, ["checkout", "-q", "-b", branch]);
+
+  return { workDir, originDir, baseCommit: opts.baseCommit, branch };
 }

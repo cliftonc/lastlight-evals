@@ -21,6 +21,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 
 import * as p from "@clack/prompts";
 import chalk from "chalk";
@@ -43,6 +44,8 @@ import { discoverTiers, loadInstances, workflowFor, type Tier } from "./discover
 import { builtinDatasetsRoot, tierResultsDir, makeRunId, gitShortSha, resultsRoot, dashboardDistRoot } from "./paths.js";
 import { startServer, type RunningServer } from "./serve.js";
 import { runInit } from "./init.js";
+import { runAddCase } from "./add-case.js";
+import { ensureRepoCache, isRealSha } from "./seed.js";
 
 /** Minimal subset of the clack spinner we use. */
 interface Spinner {
@@ -452,6 +455,34 @@ async function runEval(): Promise<number> {
     return 1;
   }
 
+  // Prefetch git-source repos into the repo-local cache, SERIALLY and once per
+  // repo, BEFORE the (possibly parallel) batch — concurrent clones of the same
+  // repo race, and after this the per-run checkout is fully offline. A vendored
+  // `repos/<id>/` fixture skips this (it isn't a git-source case).
+  const gitRepos = new Map<string, string>(); // repo -> a base sha to verify
+  for (const w of work) {
+    const fixture = join(w.datasetDir, "repos", w.inst.instance_id);
+    if (existsSync(fixture)) continue;
+    if (isRealSha(w.inst.base_commit) && /^[^/]+\/[^/]+$/.test(w.inst.repo) && !gitRepos.has(w.inst.repo)) {
+      gitRepos.set(w.inst.repo, w.inst.base_commit);
+    }
+  }
+  if (gitRepos.size) {
+    const s = p.spinner();
+    s.start(`Caching ${gitRepos.size} git-source repo(s)…`);
+    try {
+      for (const [repo, baseCommit] of gitRepos) {
+        s.message(`Caching ${repo}…`);
+        ensureRepoCache({ repo, baseCommit });
+      }
+      s.stop(`Cached ${gitRepos.size} git-source repo(s).`);
+    } catch (err) {
+      s.stop(chalk.red(`Failed to cache a git-source repo: ${(err as Error).message}`));
+      p.outro(chalk.red("aborted"));
+      return 1;
+    }
+  }
+
   // Group work by provider family. Families run CONCURRENTLY (independent
   // provider keys / rate limits); within a family runs stay serial. Force
   // serial with --serial or when there's only one family.
@@ -798,12 +829,30 @@ async function runServe(): Promise<number> {
   return 0;
 }
 
+/** This package's version + the resolved `lastlight` core version, on one line,
+ * e.g. `lastlight-evals 0.3.0 (lastlight 0.7.2)`. Both are read from the actual
+ * installed `package.json`s (core resolved the same way `bootstrap.ts` does), so
+ * the line is always truthful about what's running. Missing/unresolvable → `?`. */
+function versionLine(): string {
+  const require = createRequire(import.meta.url);
+  const read = (spec: string): string => {
+    try {
+      return (require(spec) as { version?: string }).version ?? "?";
+    } catch {
+      return "?";
+    }
+  };
+  return `lastlight-evals ${read("../package.json")} (lastlight ${read("lastlight/package.json")})`;
+}
+
 const USAGE = `lastlight-evals — eval harness for Last Light workflows
 
 Usage:
   lastlight-evals [run] [tiers...] [options]   Run evals (default command)
   lastlight-evals init [dir] [options]         Scaffold an overlay+evals workspace
+  lastlight-evals add-case --pr|--issue <url>  Author an eval case from a GitHub PR/issue
   lastlight-evals serve [options]              Browse past runs in the dashboard (no models run)
+  lastlight-evals --version                    Print the evals + lastlight versions
 
 Run options:
   --mode <models|config>  Comparison axis. models (default): force each --model
@@ -825,20 +874,33 @@ Serve options:
   --port <n>           Preferred port for the dashboard server (default 4319)
   --no-open            Start the server but don't open a browser
 
-Run \`lastlight-evals init --help\` for init-specific flags.
-GitHub is mocked end-to-end — no real GitHub token is needed, only a provider key.`;
+Run \`lastlight-evals init --help\` / \`lastlight-evals add-case --help\` for those flags.
+GitHub is mocked end-to-end when running evals — no GitHub token needed, only a
+provider key. (\`add-case\` is the exception: it reads real PRs/issues via \`gh\`.)`;
 
-/** Top-level subcommand dispatcher: `run` (default) | `init` | `serve`. */
+/** Top-level subcommand dispatcher: `run` (default) | `init` | `add-case` | `serve`. */
 async function main(): Promise<number> {
   const sub = process.argv[2];
-  // Top-level help — only when it's not standing in for a `run` tier name.
-  if (sub === "help" || sub === "--help" || sub === "-h") {
+  // `--version` / `-v`: just the versions (machine-friendly — one line, nothing else).
+  if (sub === "--version" || sub === "-v" || sub === "version") {
+    console.log(versionLine());
+    return 0;
+  }
+  // Bare invocation or explicit help → version banner + usage. (A bare run with
+  // tiers/flags still works — only the zero-arg case shows help instead of running.)
+  if (sub === undefined || sub === "help" || sub === "--help" || sub === "-h") {
+    console.log(versionLine());
+    console.log();
     console.log(USAGE);
     return 0;
   }
   if (sub === "init") {
     // `init [dir] [flags]` — scaffold a fresh overlay+evals repo.
     return runInit(process.argv.slice(3));
+  }
+  if (sub === "add-case") {
+    // `add-case --pr|--issue <url> [flags]` — scaffold an instance from GitHub.
+    return runAddCase(process.argv.slice(3));
   }
   if (sub === "serve") {
     // `serve` — browse past runs; the live dashboard server, standalone.

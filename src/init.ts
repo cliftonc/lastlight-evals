@@ -44,6 +44,9 @@ const CONFIG_YAML = `# Last Light — eval/overlay config (merged over the core 
 const GITIGNORE = `# Eval run output (scorecards, predictions) — regenerated, never commit.
 eval-results/
 
+# Cached clones of git-source eval repos — re-fetched on demand, never commit.
+.eval-cache/
+
 # Local secrets / env.
 .env
 secrets/*
@@ -56,6 +59,7 @@ secrets/*
 // enforced even when a `.gitignore` already exists (plain init writes the full
 // template; clone-into-subdir adds these to whatever the dir already has).
 const EVAL_OUTPUT_IGNORE = "eval-results/";
+const CACHE_IGNORE = ".eval-cache/";
 const INSTANCE_IGNORE = "instance/";
 
 /**
@@ -216,7 +220,7 @@ function scaffoldEvalRepo(dir: string, overlayRepo?: string): string[] {
 
   if (overlayRepo) {
     // Separate layout — overlay assets + config come from the `instance/` checkout.
-    ensureGitignore(dir, created, [EVAL_OUTPUT_IGNORE, INSTANCE_IGNORE]);
+    ensureGitignore(dir, created, [EVAL_OUTPUT_IGNORE, CACHE_IGNORE, INSTANCE_IGNORE]);
     writeIfMissing("README.md", readmeSeparate(basename(dir), overlayRepo));
   } else {
     // Plain layout — this repo is its own overlay.
@@ -224,7 +228,7 @@ function scaffoldEvalRepo(dir: string, overlayRepo?: string): string[] {
       writeIfMissing(join(d, ".gitkeep"), "");
     }
     writeIfMissing("config.yaml", CONFIG_YAML);
-    ensureGitignore(dir, created, [EVAL_OUTPUT_IGNORE]);
+    ensureGitignore(dir, created, [EVAL_OUTPUT_IGNORE, CACHE_IGNORE]);
     writeIfMissing("README.md", readmePlain(basename(dir)));
   }
   return created;

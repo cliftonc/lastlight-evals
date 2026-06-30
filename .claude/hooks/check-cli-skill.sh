@@ -1,6 +1,7 @@
 #!/bin/sh
-# PostToolUse drift guard: when the CLI surface (src/run.ts / src/init.ts)
-# changes, remind whoever's editing to review the `lastlight-evals` agent skill,
+# PostToolUse drift guard: when the CLI surface (src/run.ts / src/init.ts /
+# src/add-case.ts) changes, remind whoever's editing to review the
+# `lastlight-evals` agent skill,
 # which documents that surface and lives in a SEPARATE repo (the `lastlight`
 # plugin). Pure POSIX sh — no jq / node dependency.
 #
@@ -19,7 +20,7 @@ file_path=$(printf '%s' "$payload" \
 
 # Only the CLI surface of record matters here.
 case "$file_path" in
-  */src/run.ts|*/src/init.ts|src/run.ts|src/init.ts) ;;
+  */src/run.ts|*/src/init.ts|*/src/add-case.ts|src/run.ts|src/init.ts|src/add-case.ts) ;;
   *) exit 0 ;;
 esac
 
@@ -37,7 +38,7 @@ else
   location="$skill_rel in cliftonc/lastlight (the lastlight plugin); set LASTLIGHT_CORE_DIR to resolve it locally"
 fi
 
-reminder="You edited the lastlight-evals CLI surface ($file_path). The 'lastlight-evals' agent skill documents this CLI (run/init/serve subcommands + flags) and lives in a SEPARATE repo: $location. If you changed any subcommand, flag, default, or example, update the skill (SKILL.md and references/) in the same change so it doesn't drift."
+reminder="You edited the lastlight-evals CLI surface ($file_path). The 'lastlight-evals' agent skill documents this CLI (run/init/add-case/serve subcommands + flags) and lives in a SEPARATE repo: $location. If you changed any subcommand, flag, default, or example, update the skill (SKILL.md and references/) in the same change so it doesn't drift."
 
 # Emit as PostToolUse additionalContext so the reminder reaches the agent.
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":%s}}\n' \

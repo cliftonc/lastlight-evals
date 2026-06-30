@@ -323,13 +323,44 @@ by name with **overlay > user (`--datasets`) > built-in** precedence:
 }
 ```
 
-**Code-fix** — three things keyed by `instance_id`, all under the tier dir:
+Or scaffold one from a **real, resolved issue** — its content, the labels that were
+applied (with who applied them), and reviewer comments become the gold case:
+
+```bash
+lastlight-evals add-case --issue https://github.com/owner/repo/issues/42 --dry-run
+```
+
+It seeds the issue *without* its triage labels (so the agent triages fresh), sets
+`expect_github.labels_added` to the applied labels (+ `issue_closed` if it was
+closed), and prints the labels/comments as evidence; you then assign
+`triage_gold` (category/state) per your deployment's taxonomy.
+
+**Code-fix (vendored fixture)** — three things keyed by `instance_id`, all under
+the tier dir:
 
 ```
 <tier>/instances.json     # the SweBenchInstance (FAIL_TO_PASS / PASS_TO_PASS)
 <tier>/repos/<id>/        # fixture repo at base_commit (NO held-out tests)
 <tier>/tests/<id>/        # held-out test files, copied in at grade time
 ```
+
+**Code-fix from a real PR (git-source)** — point the CLI at a merged PR instead
+of hand-building a fixture:
+
+```bash
+lastlight-evals add-case --pr https://github.com/owner/repo/pull/123 --dry-run
+```
+
+It reads the PR with `gh`, computes `base_commit` (the merge-base of the base
+branch and the PR head) + `head_commit`, captures the PR's **test** diff as the
+held-out `test_patch`, and — unless `--no-validate` — runs the tests at base
+(red) vs head (green) to fill `FAIL_TO_PASS` / `PASS_TO_PASS`. Drop `--dry-run`
+to write it (to `--datasets <dir>` / `--overlay <dir>`, else `./datasets`). No
+`repos/<id>/` is vendored: at run time the harness clones the repo into the
+gitignored `./.eval-cache/` and checks out `base_commit`. Non-`node --test`
+runners work via `--test-cmd "<cmd>"` (+ `--setup-cmd "<cmd>"`), graded on the
+test command's exit code (suite mode) when it emits no TAP names. The repo's
+tests run real code — only use trusted repos.
 
 A new tier just needs a directory with an `instances.json` and a `tier.json`
 (`{ "name", "defaultWorkflow", "description" }`); per-instance `workflow` wins

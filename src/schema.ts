@@ -54,8 +54,13 @@ export interface ExpectGithub {
 export interface SweBenchInstance {
   // ── SWE-bench core (schema-compatible) ──────────────────────────────────
   instance_id: string;
-  /** "owner/name" — logical; the fixture origin is a local bare repo. */
+  /** "owner/name". For a vendored fixture (`repos/<id>/`) the origin is a local
+   * bare repo and this is logical. For a **git-source** case (no fixture dir) it
+   * is the real GitHub repo the harness clones at run time. */
   repo: string;
+  /** SWE-bench base commit. Unused for vendored fixtures (the harness synthesizes
+   * its own base). For a git-source case it is the real upstream SHA checked out
+   * into the sandbox — see `seedWorkspaceFromGit`. */
   base_commit?: string;
   /** The issue text handed to the agent (also seeded into the fake GitHub). */
   problem_statement: string;
@@ -63,12 +68,22 @@ export interface SweBenchInstance {
   patch?: string;
   /** Held-out tests, applied AFTER the agent runs (kept out of the agent's repo). */
   test_patch?: string;
-  /** Test ids expected to go red→green. */
+  /** Test ids expected to go red→green. Empty/absent ⇒ suite mode (graded on the
+   * test command's exit code rather than per-test TAP names). */
   FAIL_TO_PASS?: string[];
   /** Test ids that must stay green. */
   PASS_TO_PASS?: string[];
   environment_setup_commit?: string;
   version?: string;
+  /** Held-out test command argv (default: `node --test` over discovered files).
+   * Set for repos that use another runner, e.g. `["npm","test"]`. */
+  test_cmd?: string[];
+  /** Optional install/build argv run in the workspace BEFORE the held-out tests
+   * (e.g. `["npm","ci"]`). Runs untrusted repo code — git-source cases only. */
+  setup_cmd?: string[];
+  /** PR head SHA — reference/authoring provenance (the gold `patch` is its diff
+   * against `base_commit`). Not used at run time. */
+  head_commit?: string;
 
   // ── Last Light extensions (ignored by real SWE-bench) ───────────────────
   /** Which real production workflow to run (default depends on the tier). */

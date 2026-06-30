@@ -10,12 +10,13 @@
 
 import { describe, it, expect } from "vitest";
 import { GitHubClient } from "agentic-pi/dist/extensions/github/client.js";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { startFakeGitHub } from "./fake-github.js";
-import { seedWorkspace } from "./seed.js";
+import { seedWorkspace, seedWorkspaceFromGit } from "./seed.js";
+import { execFileSync } from "node:child_process";
 import { gradeExecution, gradeBehavioral, gradeTriage } from "./grade.js";
 import { loadMergedConfig, resolvePhaseModel } from "./config.js";
 import { modelsArm, configArm, releaseOverlayGuard } from "./arm.js";
@@ -294,6 +295,70 @@ describe("workspace seed + execution grade (SWE-bench resolved)", () => {
       expect(after.resolved).toBe(true);
     } finally {
       rmSync(stateDir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it("suite mode: grades on the test command's exit code when there are no TAP names", () => {
+    const workDir = mkdtempSync(join(tmpdir(), "ll-eval-suite-"));
+    try {
+      const green = gradeExecution({ workDir, failToPass: [], passToPass: [], testCmd: ["node", "-e", "process.exit(0)"] });
+      expect(green.resolved).toBe(true);
+      const red = gradeExecution({ workDir, failToPass: [], passToPass: [], testCmd: ["node", "-e", "process.exit(1)"] });
+      expect(red.resolved).toBe(false);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+describe("git-source seeding (checkout a base commit, fully offline)", () => {
+  it("checks out base_commit from a local mirror and sets up an offline push origin", () => {
+    const root = mkdtempSync(join(tmpdir(), "ll-eval-gitsrc-"));
+    const g = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, stdio: ["ignore", "pipe", "pipe"] }).toString();
+    try {
+      // Build a source repo: base commit (val=base) then a later commit (val=head).
+      const src = join(root, "src-repo");
+      mkdirSync(src, { recursive: true });
+      g(src, "init", "-q", "-b", "main");
+      g(src, "config", "user.email", "t@t");
+      g(src, "config", "user.name", "t");
+      writeFileSync(join(src, "val.txt"), "base\n");
+      g(src, "add", "-A");
+      g(src, "commit", "-q", "-m", "base");
+      const base = g(src, "rev-parse", "HEAD").trim();
+      writeFileSync(join(src, "val.txt"), "head\n");
+      g(src, "add", "-A");
+      g(src, "commit", "-q", "-m", "head");
+
+      // Pre-seed the cache mirror at the path ensureRepoCache expects, so no
+      // network clone happens — the whole test is offline.
+      const cache = join(root, "cache");
+      mkdirSync(join(cache, "repos"), { recursive: true });
+      g(join(cache, "repos"), "clone", "--bare", "--quiet", src, join(cache, "repos", "acme__widget.git"));
+
+      const stateDir = join(root, "state");
+      mkdirSync(stateDir, { recursive: true });
+      process.env.LASTLIGHT_EVALS_CACHE = cache;
+      const seeded = seedWorkspaceFromGit({
+        stateDir,
+        taskId: "gitsrc-task",
+        repo: "acme/widget",
+        baseCommit: base,
+        branch: "lastlight/fix",
+      });
+
+      expect(seeded.baseCommit).toBe(base);
+      expect(seeded.branch).toBe("lastlight/fix");
+      // Working tree is the BASE state, not head.
+      expect(readFileSync(join(seeded.workDir, "val.txt"), "utf8")).toBe("base\n");
+      // The offline origin accepts a push (proves `git push` works with no network).
+      writeFileSync(join(seeded.workDir, "fix.txt"), "fixed\n");
+      g(seeded.workDir, "add", "-A");
+      g(seeded.workDir, "-c", "user.email=e@e", "-c", "user.name=e", "commit", "-q", "-m", "fix");
+      expect(() => g(seeded.workDir, "push", "-q", "origin", "HEAD:refs/heads/lastlight/fix")).not.toThrow();
+    } finally {
+      delete process.env.LASTLIGHT_EVALS_CACHE;
+      rmSync(root, { recursive: true, force: true });
     }
   }, 60_000);
 });

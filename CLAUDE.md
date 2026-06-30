@@ -13,16 +13,17 @@ public `lastlight/evals` barrel. Source is under `src/`; the shipped sample
 
 A CLI that runs Last Light's real workflows against a mocked GitHub for a set of
 models and prints a deterministic, model-comparison scorecard. `run.ts` is the
-entry; `lastlight-evals run` / `lastlight-evals init` are the two subcommands.
+entry; the subcommands are `run`, `init`, `add-case`, and `serve`.
 
 ## Related: the `lastlight-evals` skill (keep in sync)
 
 The user-facing **agent skill** that teaches people to drive this CLI lives in a
 **separate repo** — the `lastlight` plugin, at
 `~/work/lastlight/plugins/lastlight/skills/lastlight-evals/SKILL.md` (+ its
-`references/`). It documents this CLI's surface: the `run` / `init` / `serve`
-subcommands and their flags, defined here in `src/run.ts` (the `USAGE` block)
-and `src/init.ts` (the `init` flags).
+`references/`). It documents this CLI's surface: the `run` / `init` / `add-case`
+/ `serve` subcommands and their flags, defined here in `src/run.ts` (the `USAGE`
+block), `src/init.ts` (the `init` flags), and `src/add-case.ts` (the `add-case`
+flags + the PR/issue authoring flow, also in `references/authoring-from-pr.md`).
 
 **When you change that surface — add/rename/remove a subcommand, flag, default,
 or example — update the skill in the same change** so it doesn't drift. A
@@ -45,10 +46,12 @@ npx tsx src/run.ts run triage          # one tier
 npx tsx src/run.ts run --compare       # cross-vendor (key-gated, see models.json)
 npx tsx src/run.ts serve               # browse past runs in the dashboard
 npx tsx src/run.ts init /tmp/my-evals  # scaffold an overlay+evals repo
+npx tsx src/run.ts add-case --pr <url> --dry-run   # author a code-fix case from a real PR
 
 # Installed:
 lastlight-evals run [tier...] [--model X] [--runs N] [--overlay DIR] [--datasets DIR]
 lastlight-evals run [tier...] --mode config [--overlay DIR ...] [--model X]  # per-step config run type
+lastlight-evals add-case --pr <url> | --issue <url> [--datasets DIR | --overlay DIR]  # author a case from GitHub
 lastlight-evals serve [--port N]       # dashboard over ./eval-results
 ```
 
@@ -131,13 +134,14 @@ The release commit is conventionally just the two version-file lines
 
 | File | Role |
 |---|---|
-| `src/run.ts` | CLI entry + subcommand dispatch (`run` / `init` / `serve`); work-list, parallelism, live JSON writes, auto-serve. |
+| `src/run.ts` | CLI entry + subcommand dispatch (`run` / `init` / `add-case` / `serve`); work-list, git-source cache prefetch, parallelism, live JSON writes, auto-serve. |
 | `src/run-instance.ts` | Runs ONE instance through the real workflow (the only file importing `lastlight/evals`). |
 | `src/bootstrap.ts` | `bootstrapAssets()` — wires core's asset roots. MUST run before any workflow access. |
 | `src/discovery.ts` | Multi-root tier discovery (`tier.json` → `defaultWorkflow`). |
 | `src/init.ts` | `init` — scaffold + `gh repo create` an overlay+evals repo. |
+| `src/add-case.ts` | `add-case` — author an instance from a real GitHub PR/issue (`gh`+`git`: base/head SHAs, `test_patch`, red→green verdicts). |
 | `src/fake-github.ts` | In-process fake GitHub REST API (seeds fixtures, records mutations). |
-| `src/seed.ts` / `src/grade.ts` / `src/metrics.ts` | Workspace seeding / deterministic grading / token-cost roll-up. |
+| `src/seed.ts` / `src/grade.ts` / `src/metrics.ts` | Workspace seeding (vendored fixture OR git-source checkout @ `base_commit` from the `./.eval-cache/` mirror) / deterministic grading (named TAP or suite exit-code) / token-cost roll-up. |
 | `src/report.ts` | Scorecard roll-up + JSON/JSONL artifacts + `buildIndex` (filesystem → the SPA's `/api/index`). |
 | `src/serve.ts` | Tiny dependency-free server: `/api/index` (fs scan), `/data/*` (raw artifacts), the SPA + fallback. |
 | `dashboard/` | The JSON-driven dashboard SPA (Vite + React + Tailwind/daisyUI + TanStack Query); ships prebuilt as `dashboard/dist`. |
@@ -157,9 +161,24 @@ The release commit is conventionally just the two version-file lines
   you're testing — don't burn time/cost on a strong model for a smoke run.
 - **Add a triage case:** append a `SweBenchInstance` to
   `datasets/triage/instances.json` (`instance_id`, `issue`, `triage_gold`,
-  `expect_github`). See README "Add a case".
-- **Add a code-fix case:** `datasets/code-fix/instances.json` +
+  `expect_github`). See README "Add a case". Or scaffold from a real resolved
+  issue: `lastlight-evals add-case --issue <url>` — pulls content + applied labels
+  (via the issue events API, with who applied each) + reviewer comments, seeds the
+  issue WITHOUT its triage labels, and sets `expect_github.labels_added` /
+  `issue_closed`; you assign `triage_gold` (category/state) per the deployment's
+  taxonomy.
+- **Add a code-fix case (vendored):** `datasets/code-fix/instances.json` +
   `repos/<id>/` (fixture @ base) + `tests/<id>/` (held-out tests).
+- **Add a code-fix case from a real PR (git-source):**
+  `lastlight-evals add-case --pr <url>` (`src/add-case.ts`) extracts `repo`,
+  `base_commit` (merge-base of base & head), `head_commit`, the `test_patch` (the
+  PR's test diff), and auto-detects `FAIL_TO_PASS`/`PASS_TO_PASS` by running the
+  tests at base (red) vs head (green). No `repos/<id>/` is written — at run time
+  `seedWorkspaceFromGit` clones the repo into the gitignored repo-local
+  `./.eval-cache/` and checks out `base_commit`. `--dry-run` prints the instance
+  for the skill/agent to refine; `--no-validate` skips running the repo's tests.
+  Suite mode (no TAP names ⇒ graded on the test command's exit code) covers
+  non-`node --test` runners via `test_cmd`/`setup_cmd`.
 - **Add a tier:** drop a dir with `instances.json` + `tier.json`
   (`{ name, defaultWorkflow, description }`). No code change — `discovery.ts`
   finds it. The workflow must be resolvable by core's `getWorkflow`.

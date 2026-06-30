@@ -31,7 +31,7 @@ import {
 import type { SweBenchInstance, InstanceResult, PhaseSession } from "./schema.js";
 import type { Arm } from "./arm.js";
 import { startFakeGitHub } from "./fake-github.js";
-import { seedWorkspace } from "./seed.js";
+import { seedWorkspace, seedWorkspaceFromGit, isRealSha } from "./seed.js";
 import { collectMetrics, drainSessions, readSessionLog, listSessionFiles, concatJsonl } from "./metrics.js";
 import { gradeBehavioral, gradeExecution, gradeTriage } from "./grade.js";
 
@@ -145,11 +145,16 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
   };
 
   try {
-    // 2. Seed the workspace for code-fix (triage needs no repo).
-    if (isCodeFix && opts.datasetDir) {
-      const fixtureDir = join(opts.datasetDir, "repos", inst.instance_id);
-      if (existsSync(fixtureDir)) {
+    // 2. Seed the workspace for code-fix (triage needs no repo). A vendored
+    //    fixture dir wins; otherwise a git-source case (real base SHA + real
+    //    repo) is checked out from the repo-local cache. Either way the agent
+    //    works in a pre-seeded dir with an offline origin — no GitHub clone.
+    if (isCodeFix) {
+      const fixtureDir = opts.datasetDir ? join(opts.datasetDir, "repos", inst.instance_id) : undefined;
+      if (fixtureDir && existsSync(fixtureDir)) {
         seedWorkspace({ stateDir, taskId, fixtureDir, branch });
+      } else if (isRealSha(inst.base_commit) && /^[^/]+\/[^/]+$/.test(inst.repo)) {
+        seedWorkspaceFromGit({ stateDir, taskId, repo: inst.repo, baseCommit: inst.base_commit, branch });
       }
     }
 
@@ -284,7 +289,7 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
     };
 
     // 5b. Execution grade (code-fix only).
-    if (isCodeFix && (inst.FAIL_TO_PASS?.length || inst.test_patch)) {
+    if (isCodeFix && (inst.FAIL_TO_PASS?.length || inst.test_patch || inst.test_cmd)) {
       const workDir = join(stateDir, "sandboxes", taskId);
       const heldOutDir = opts.datasetDir ? join(opts.datasetDir, "tests", inst.instance_id) : undefined;
       const exec = gradeExecution({
@@ -293,6 +298,8 @@ export async function runInstance(inst: SweBenchInstance, opts: RunInstanceOptio
         testPatch: inst.test_patch,
         failToPass: inst.FAIL_TO_PASS ?? [],
         passToPass: inst.PASS_TO_PASS ?? [],
+        testCmd: inst.test_cmd,
+        setupCmd: inst.setup_cmd,
       });
       result.resolved = exec.resolved;
       result.failToPass = exec.failToPass;

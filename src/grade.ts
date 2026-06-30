@@ -108,6 +108,9 @@ export function gradeExecution(opts: {
   passToPass: string[];
   /** Override the test command argv (default: node --test over *.test.ts). */
   testCmd?: string[];
+  /** Optional install/build argv run in `workDir` BEFORE the tests (git-source
+   * repos that need deps, e.g. `["npm","ci"]`). Runs untrusted repo code. */
+  setupCmd?: string[];
 }): ExecutionGrade {
   // Apply held-out tests the agent never saw.
   if (opts.heldOutDir && existsSync(opts.heldOutDir)) {
@@ -119,8 +122,28 @@ export function gradeExecution(opts: {
     execFileSync("git", ["apply", patchFile], { cwd: opts.workDir, stdio: ["ignore", "pipe", "pipe"] });
   }
 
-  const testFiles = listTestFiles(opts.workDir);
-  const cmd = opts.testCmd ?? [
+  let setupLog = "";
+  if (opts.setupCmd?.length) {
+    const [bin, ...rest] = opts.setupCmd;
+    try {
+      setupLog = execFileSync(bin, rest, {
+        cwd: opts.workDir,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 600_000,
+      }).toString();
+    } catch (err) {
+      const e = err as { stdout?: Buffer | string; stderr?: Buffer | string };
+      setupLog = (e.stdout?.toString() ?? "") + (e.stderr?.toString() ?? "");
+    }
+  }
+
+  // The default runner emits TAP we can parse per-test; a custom `test_cmd` may
+  // not — that's fine, suite mode below falls back to the exit code.
+  const isDefaultRunner = !opts.testCmd;
+  const testFiles = isDefaultRunner ? listTestFiles(opts.workDir) : [];
+  const argv = opts.testCmd ?? [
+    process.execPath,
     "--test",
     "--test-reporter=tap",
     "--experimental-strip-types",
@@ -128,24 +151,42 @@ export function gradeExecution(opts: {
   ];
 
   let raw = "";
+  let exitOk = false;
   try {
-    raw = execFileSync(process.execPath, cmd, {
+    raw = execFileSync(argv[0], argv.slice(1), {
       cwd: opts.workDir,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 120_000,
     }).toString();
+    exitOk = true;
   } catch (err) {
-    // node --test exits non-zero on any failing test; its stdout still holds TAP.
+    // A failing test run exits non-zero; its stdout still holds the TAP/log.
     const e = err as { stdout?: Buffer | string; stderr?: Buffer | string };
     raw = (e.stdout?.toString() ?? "") + (e.stderr?.toString() ?? "");
   }
 
   const passed = parseTap(raw);
-  const fail = opts.failToPass.map((id) => ({ id, pass: passed.get(id) === true }));
-  const pass = opts.passToPass.map((id) => ({ id, pass: passed.get(id) === true }));
-  const resolved = fail.every((t) => t.pass) && pass.every((t) => t.pass) && opts.failToPass.length > 0;
-  return { resolved, failToPass: fail, passToPass: pass, raw };
+  // Named mode when at least one FAIL_TO_PASS id shows up in the TAP stream;
+  // otherwise suite mode — grade on the command's exit code.
+  const named = opts.failToPass.length > 0 && opts.failToPass.some((id) => passed.has(id));
+
+  let fail: { id: string; pass: boolean }[];
+  let pass: { id: string; pass: boolean }[];
+  let resolved: boolean;
+  if (named) {
+    fail = opts.failToPass.map((id) => ({ id, pass: passed.get(id) === true }));
+    pass = opts.passToPass.map((id) => ({ id, pass: passed.get(id) === true }));
+    resolved = fail.every((t) => t.pass) && pass.every((t) => t.pass);
+  } else {
+    // Suite mode: the held-out tests pass iff the command exited 0. Report each
+    // declared id against that single outcome; honor any PASS_TO_PASS names that
+    // did surface in TAP.
+    fail = opts.failToPass.map((id) => ({ id, pass: exitOk }));
+    pass = opts.passToPass.map((id) => ({ id, pass: passed.has(id) ? passed.get(id) === true : exitOk }));
+    resolved = exitOk && pass.every((t) => t.pass);
+  }
+  return { resolved, failToPass: fail, passToPass: pass, raw: setupLog ? `${setupLog}\n${raw}` : raw };
 }
 
 function parseTap(raw: string): Map<string, boolean> {
